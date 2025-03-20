@@ -46,14 +46,12 @@ struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
 	}
 	
 	mc_tm->n_classes = n_classes;
-	mc_tm->threshold = threshold;
-	mc_tm->n_features = n_features;
-	mc_tm->n_clauses = n_clauses;
-	mc_tm->n_states = n_states;
-	mc_tm->boost_true_positive_feedback = boost_true_positive_feedback;
 	
-	mc_tm->predict = predict;
-	mc_tm->update = update;
+	mc_tm->tsetlin_machines = (struct TsetlinMachine **)malloc(n_classes * sizeof(struct TsetlinMachine *));
+	if(mc_tm->tsetlin_machines == NULL) {
+		perror("Memory allocation failed");
+		return NULL;
+	}
 
 	for (int i = 0; i < mc_tm->n_classes; i++) {
 		mc_tm->tsetlin_machines[i] = CreateTsetlinMachine(threshold, n_features, n_clauses, n_states, boost_true_positive_feedback, predict, update);
@@ -68,10 +66,13 @@ struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
 
 void free_mc_tsetlin_machine(struct MultiClassTsetlinMachine *mc_tm) {
 	if (mc_tm != NULL) {
-		for (int i = 0; i < mc_tm->n_classes; i++) {
-			if(mc_tm->tsetlin_machines[i] != NULL) {
-				free_tsetlin_machine(mc_tm->tsetlin_machines[i]);
+		if (mc_tm->tsetlin_machines != NULL) {
+			for (int i = 0; i < mc_tm->n_classes; i++) {
+				if(mc_tm->tsetlin_machines[i] != NULL) {
+					free_tsetlin_machine(mc_tm->tsetlin_machines[i]);
+				}
 			}
+			free(mc_tm->tsetlin_machines);
 		}
 		free(mc_tm);
 	}

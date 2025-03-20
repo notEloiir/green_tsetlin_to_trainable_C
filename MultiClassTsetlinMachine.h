@@ -30,16 +30,8 @@ https://arxiv.org/abs/1804.01508
 
 struct MultiClassTsetlinMachine { 
 	int n_classes;
-    int threshold;
-    int n_features;
-    int n_clauses;
-    int n_states;
-    int boost_true_positive_feedback;
-
-    int predict;
-    int update;
 	
-	struct TsetlinMachine **tsetlin_machines;  // pointer to shape: n_classes
+	struct TsetlinMachine **tsetlin_machines;  // shape: n_classes
 };
 
 struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
