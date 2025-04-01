@@ -1,4 +1,8 @@
 /*
+(Heavily) Modified code from https://github.com/cair/TsetlinMachineC
+*/
+
+/*
 
 Copyright (c) 2019 Ole-Christoffer Granmo
 
@@ -35,7 +39,7 @@ https://arxiv.org/abs/1804.01508
 /**************************************/
 
 /*** Initialize Tsetlin Machine ***/
-struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n_clauses, int n_states, int boost_true_positive_feedback, int predict, int update)
+struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
 {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
@@ -46,7 +50,8 @@ struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n
 	tm->threshold = threshold;
 	tm->n_features = n_features;
 	tm->n_clauses = n_clauses;
-	tm->n_states = n_states;
+	tm->max_state = max_state;
+	tm->min_state = min_state;
 	tm->boost_true_positive_feedback = boost_true_positive_feedback;
 	
 	tm->predict = predict;
@@ -129,23 +134,25 @@ void free_tsetlin_machine(struct TsetlinMachine *tm) {
 
 void tm_initialize(struct TsetlinMachine *tm)
 {
+    int mean = (tm->max_state - tm->min_state) / 2;
+
 	for (int j = 0; j < tm->n_clauses; j++) {				
 		for (int k = 0; k < tm->n_features; k++) {
 			if (1.0 * rand()/RAND_MAX <= 0.5) {
-				(*tm).ta_state[j][k][0] = tm->n_states;
-				(*tm).ta_state[j][k][1] = tm->n_states + 1; 
+				(*tm).ta_state[j][k][0] = mean - 1;
+				(*tm).ta_state[j][k][1] = mean;
 			} else {
-				(*tm).ta_state[j][k][0] = tm->n_states + 1;
-				(*tm).ta_state[j][k][1] = tm->n_states; // Deviation, should be random
+				(*tm).ta_state[j][k][0] = mean;
+				(*tm).ta_state[j][k][1] = mean - 1; // Deviation, should be random  // What is this comment about
 			}
 		}
 	}
 }
 
 /* Translates automata state to action */
-static inline int action(int state, int n_states)
+static inline int action(int state)
 {
-		return state > n_states;
+		return state >= 0;
 }
 
 /* Calculate the output of each clause using the actions of each Tsetline Automaton. */
@@ -161,8 +168,8 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], 
 		(*tm).clause_output[j] = 1;
 		all_exclude = 1;
 		for (k = 0; k < tm->n_features; k++) {
-			action_include = action((*tm).ta_state[j][k][0], tm->n_states);
-			action_include_negated = action((*tm).ta_state[j][k][1], tm->n_states);
+			action_include = action((*tm).ta_state[j][k][0]);
+			action_include_negated = action((*tm).ta_state[j][k][1]);
 
 			all_exclude = all_exclude && !(action_include == 1 || action_include_negated == 1);
 
@@ -205,20 +212,20 @@ static inline void type_i_feedback(struct TsetlinMachine *tm, int *Xi, int j, fl
 {
 	if ((*tm).clause_output[j] == 0)	{
 		for (int k = 0; k < FEATURES; k++) {
-			(*tm).ta_state[j][k][0] -= ((*tm).ta_state[j][k][0] > 1) && (1.0*rand()/RAND_MAX <= 1.0/s);
+			(*tm).ta_state[j][k][0] -= ((*tm).ta_state[j][k][0] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 								
-			(*tm).ta_state[j][k][1] -= ((*tm).ta_state[j][k][1] > 1) && (1.0*rand()/RAND_MAX <= 1.0/s);
+			(*tm).ta_state[j][k][1] -= ((*tm).ta_state[j][k][1] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 		}
 	} else if ((*tm).clause_output[j] == 1) {					
 		for (int k = 0; k < FEATURES; k++) {
 			if (Xi[k] == 1) {
-				(*tm).ta_state[j][k][0] += ((*tm).ta_state[j][k][0] < tm->n_states*2) && (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= (s-1)/s);
+				(*tm).ta_state[j][k][0] += ((*tm).ta_state[j][k][0] < tm->max_state) && (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= (s-1)/s);
 
-				(*tm).ta_state[j][k][1] -= ((*tm).ta_state[j][k][1] > 1) && (1.0*rand()/RAND_MAX <= 1.0/s);
+				(*tm).ta_state[j][k][1] -= ((*tm).ta_state[j][k][1] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 			} else if (Xi[k] == 0) {
-				(*tm).ta_state[j][k][1] += ((*tm).ta_state[j][k][1] < tm->n_states*2) && (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= (s-1)/s);
+				(*tm).ta_state[j][k][1] += ((*tm).ta_state[j][k][1] < tm->max_state) && (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= (s-1)/s);
 				
-				(*tm).ta_state[j][k][0] -= ((*tm).ta_state[j][k][0] > 1) && (1.0*rand()/RAND_MAX <= 1.0/s);
+				(*tm).ta_state[j][k][0] -= ((*tm).ta_state[j][k][0] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 			}
 		}
 	}
@@ -235,11 +242,11 @@ static inline void type_ii_feedback(struct TsetlinMachine *tm, int *Xi, int j) {
 
 	if ((*tm).clause_output[j] == 1) {
 		for (int k = 0; k < tm->n_features; k++) { 
-			action_include = action((*tm).ta_state[j][k][0], tm->n_states);
-			action_include_negated = action((*tm).ta_state[j][k][1], tm->n_states);
+			action_include = action((*tm).ta_state[j][k][0]);
+			action_include_negated = action((*tm).ta_state[j][k][1]);
 
-			(*tm).ta_state[j][k][0] += (action_include == 0 && (*tm).ta_state[j][k][0] < tm->n_states*2) && (Xi[k] == 0);
-			(*tm).ta_state[j][k][1] += (action_include_negated == 0 && (*tm).ta_state[j][k][1] < tm->n_states*2) && (Xi[k] == 1);
+			(*tm).ta_state[j][k][0] += (action_include == 0 && (*tm).ta_state[j][k][0] < tm->max_state) && (Xi[k] == 0);
+			(*tm).ta_state[j][k][1] += (action_include_negated == 0 && (*tm).ta_state[j][k][1] < tm->max_state) && (Xi[k] == 1);
 		}
 	}
 }

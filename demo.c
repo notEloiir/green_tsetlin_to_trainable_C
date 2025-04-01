@@ -12,10 +12,8 @@ struct MultiClassTsetlinMachine* read_from_bin(const char *filename) {
     }
     
     int threshold;
-    int n_features;
-    int n_clauses;
-    int n_classes;
-    int n_states;
+    int n_features, n_clauses, n_classes;
+    int max_state, min_state;
     int boost_true_positive_feedback;
 
     // Read metadata
@@ -23,11 +21,12 @@ struct MultiClassTsetlinMachine* read_from_bin(const char *filename) {
     fread(&n_features, sizeof(int), 1, file);
     fread(&n_clauses, sizeof(int), 1, file);
     fread(&n_classes, sizeof(int), 1, file);
-    fread(&n_states, sizeof(int), 1, file);
+    fread(&max_state, sizeof(int), 1, file);
+    fread(&min_state, sizeof(int), 1, file);
     fread(&boost_true_positive_feedback, sizeof(int), 1, file);
     
-    struct MultiClassTsetlinMachine *tm = CreateMultiClassTsetlinMachine(n_classes, threshold, 
-    	n_features, n_clauses, n_states, boost_true_positive_feedback, 1, 0);
+    struct MultiClassTsetlinMachine *tm = CreateMultiClassTsetlinMachine(
+        n_classes, threshold, n_features, n_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
     if (!tm) {
         perror("CreateMultiClassTsetlinMachine failed");
         fclose(file);
@@ -58,7 +57,8 @@ int main() {
         printf("Features: %d\n", tm->tsetlin_machines[0]->n_features);
         printf("Clauses: %d\n", tm->tsetlin_machines[0]->n_clauses);
         printf("Classes: %d\n", tm->n_classes);
-        printf("States: %d\n", tm->tsetlin_machines[0]->n_states);
+        printf("Max state: %d\n", tm->tsetlin_machines[0]->max_state);
+        printf("Min state: %d\n", tm->tsetlin_machines[0]->min_state);
         printf("Boost: %d\n", tm->tsetlin_machines[0]->boost_true_positive_feedback);
 
         free_mc_tsetlin_machine(tm);
