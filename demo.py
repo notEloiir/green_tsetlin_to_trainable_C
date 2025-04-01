@@ -4,7 +4,7 @@ import numpy as np
 
 def save_to_bin(tm: gt.TsetlinMachine, filename: str):
     threshold: int = tm.threshold
-    n_features: int = tm.n_literals
+    n_literals: int = tm.n_literals
     n_clauses: int = tm.n_clauses
     n_classes: int = tm.n_classes
     max_state: int = 127    # hardcoded in green_tsetlin/src/func_tm.hpp
@@ -15,7 +15,7 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
     clauses: np.ndarray = tm._state.c  # shape=(n_clauses, n_literals*2), dtype=np.int8
 
     print("threshold", threshold,
-          "n_features", n_features,
+          "n_literals", n_literals,
           "n_clauses", n_clauses,
           "n_classes", n_classes,
           "max_state", max_state,
@@ -28,7 +28,7 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
     with open(filename, "wb") as f:
         # Write metadata
         f.write(threshold.to_bytes(4, "little", signed=True))
-        f.write(n_features.to_bytes(4, "little", signed=True))
+        f.write(n_literals.to_bytes(4, "little", signed=True))
         f.write(n_clauses.to_bytes(4, "little", signed=True))
         f.write(n_classes.to_bytes(4, "little", signed=True))
         f.write(max_state.to_bytes(4, "little", signed=True))

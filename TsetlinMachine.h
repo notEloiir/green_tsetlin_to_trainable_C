@@ -40,7 +40,7 @@ https://arxiv.org/abs/1804.01508
 
 struct TsetlinMachine {
     int threshold;
-    int n_features;
+    int n_literals;
     int n_clauses;
     int max_state, min_state;
     int boost_true_positive_feedback;
@@ -48,13 +48,13 @@ struct TsetlinMachine {
     int predict;
     int update;
 
-	int ***ta_state;  // shape: (n_clauses, n_features, 2)
+	int ***ta_state;  // shape: (n_clauses, n_literals, 2)
 	int *clause_output;  // shape: n_clauses
 	int *feedback_to_clauses;  // shape: n_clauses
 };
 
 struct TsetlinMachine *CreateTsetlinMachine(
-    int threshold, int n_features, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
+    int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 );
 
 void free_tsetlin_machine(struct TsetlinMachine *tm);

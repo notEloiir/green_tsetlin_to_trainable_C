@@ -40,7 +40,7 @@ https://arxiv.org/abs/1804.01508
 
 /*** Initialize Tsetlin Machine ***/
 struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
-	int n_classes, int threshold, int n_features, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
+	int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 )
 {
 	struct MultiClassTsetlinMachine *mc_tm = (struct MultiClassTsetlinMachine *)malloc(sizeof(struct MultiClassTsetlinMachine));
@@ -58,7 +58,7 @@ struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
 	}
 
 	for (int i = 0; i < mc_tm->n_classes; i++) {
-		mc_tm->tsetlin_machines[i] = CreateTsetlinMachine(threshold, n_features, n_clauses, max_state, min_state, boost_true_positive_feedback, predict, update);
+		mc_tm->tsetlin_machines[i] = CreateTsetlinMachine(threshold, n_literals, n_clauses, max_state, min_state, boost_true_positive_feedback, predict, update);
 		if (mc_tm == NULL) {
 			perror("CreateTsetlinMachine failed");
 			free_mc_tsetlin_machine(mc_tm);

@@ -39,7 +39,7 @@ https://arxiv.org/abs/1804.01508
 /**************************************/
 
 /*** Initialize Tsetlin Machine ***/
-struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
+struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
 {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
@@ -48,7 +48,7 @@ struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n
 	}
 	
 	tm->threshold = threshold;
-	tm->n_features = n_features;
+	tm->n_literals = n_literals;
 	tm->n_clauses = n_clauses;
 	tm->max_state = max_state;
 	tm->min_state = min_state;
@@ -64,13 +64,13 @@ struct TsetlinMachine *CreateTsetlinMachine(int threshold, int n_features, int n
 		return NULL;
 	}
 	for (int i = 0; i < n_clauses; i++) {
-		tm->ta_state[i] = (int **)malloc(n_features * sizeof(int *));
+		tm->ta_state[i] = (int **)malloc(n_literals * sizeof(int *));
 		if (tm->ta_state[i] == NULL) {
 			perror("Memory allocation failed");
 			free_tsetlin_machine(tm);
 			return NULL;
 		}
-		for (int j = 0; j < n_features; j++) {
+		for (int j = 0; j < n_literals; j++) {
 			tm->ta_state[i][j] = (int *)malloc(2 * sizeof(int));
 			if (tm->ta_state[i][j] == NULL) {
 				perror("Memory allocation failed");
@@ -106,7 +106,7 @@ void free_tsetlin_machine(struct TsetlinMachine *tm) {
 		if (tm->ta_state != NULL) {
 			for (int i = 0; i < tm->n_clauses; i++) {
 				if (tm->ta_state[i] != NULL) {
-					for (int j = 0; j < tm->n_features; j++) {
+					for (int j = 0; j < tm->n_literals; j++) {
 						if (tm->ta_state[i][j] != NULL) {
 							free(tm->ta_state[i][j]);
 						}
@@ -137,7 +137,7 @@ void tm_initialize(struct TsetlinMachine *tm)
     int mean = (tm->max_state - tm->min_state) / 2;
 
 	for (int j = 0; j < tm->n_clauses; j++) {				
-		for (int k = 0; k < tm->n_features; k++) {
+		for (int k = 0; k < tm->n_literals; k++) {
 			if (1.0 * rand()/RAND_MAX <= 0.5) {
 				(*tm).ta_state[j][k][0] = mean - 1;
 				(*tm).ta_state[j][k][1] = mean;
@@ -167,7 +167,7 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], 
 	for (j = 0; j < tm->n_clauses; j++) {
 		(*tm).clause_output[j] = 1;
 		all_exclude = 1;
-		for (k = 0; k < tm->n_features; k++) {
+		for (k = 0; k < tm->n_literals; k++) {
 			action_include = action((*tm).ta_state[j][k][0]);
 			action_include_negated = action((*tm).ta_state[j][k][1]);
 
@@ -241,7 +241,7 @@ static inline void type_ii_feedback(struct TsetlinMachine *tm, int *Xi, int j) {
 	int action_include_negated;
 
 	if ((*tm).clause_output[j] == 1) {
-		for (int k = 0; k < tm->n_features; k++) { 
+		for (int k = 0; k < tm->n_literals; k++) { 
 			action_include = action((*tm).ta_state[j][k][0]);
 			action_include_negated = action((*tm).ta_state[j][k][1]);
 

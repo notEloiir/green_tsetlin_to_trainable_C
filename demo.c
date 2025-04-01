@@ -12,13 +12,13 @@ struct MultiClassTsetlinMachine* read_from_bin(const char *filename) {
     }
     
     int threshold;
-    int n_features, n_clauses, n_classes;
+    int n_literals, n_clauses, n_classes;
     int max_state, min_state;
     int boost_true_positive_feedback;
 
     // Read metadata
     fread(&threshold, sizeof(int), 1, file);
-    fread(&n_features, sizeof(int), 1, file);
+    fread(&n_literals, sizeof(int), 1, file);
     fread(&n_clauses, sizeof(int), 1, file);
     fread(&n_classes, sizeof(int), 1, file);
     fread(&max_state, sizeof(int), 1, file);
@@ -26,7 +26,7 @@ struct MultiClassTsetlinMachine* read_from_bin(const char *filename) {
     fread(&boost_true_positive_feedback, sizeof(int), 1, file);
     
     struct MultiClassTsetlinMachine *tm = CreateMultiClassTsetlinMachine(
-        n_classes, threshold, n_features, n_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
+        n_classes, threshold, n_literals, n_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
     if (!tm) {
         perror("CreateMultiClassTsetlinMachine failed");
         fclose(file);
@@ -40,7 +40,7 @@ struct MultiClassTsetlinMachine* read_from_bin(const char *filename) {
     // fread(tm->weights, weights_size, 1, file);
 
     // Allocate and read clauses
-    size_t clauses_size = n_clauses * n_features * 2 * sizeof(int8_t);
+    size_t clauses_size = n_clauses * n_literals * 2 * sizeof(int8_t);
     // fread(tm->clauses, clauses_size, 1, file);
 
     fclose(file);
@@ -54,7 +54,7 @@ int main() {
 
     if (tm) {
         printf("Threshold: %d\n", tm->tsetlin_machines[0]->threshold);
-        printf("Features: %d\n", tm->tsetlin_machines[0]->n_features);
+        printf("Features: %d\n", tm->tsetlin_machines[0]->n_literals);
         printf("Clauses: %d\n", tm->tsetlin_machines[0]->n_clauses);
         printf("Classes: %d\n", tm->n_classes);
         printf("Max state: %d\n", tm->tsetlin_machines[0]->max_state);

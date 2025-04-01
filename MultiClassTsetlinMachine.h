@@ -39,7 +39,7 @@ struct MultiClassTsetlinMachine {
 };
 
 struct MultiClassTsetlinMachine *CreateMultiClassTsetlinMachine(
-	int n_classes, int threshold, int n_features, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
+	int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 );
 
 void free_mc_tsetlin_machine(struct MultiClassTsetlinMachine *tm);
