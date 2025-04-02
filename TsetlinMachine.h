@@ -29,16 +29,10 @@ https://arxiv.org/abs/1804.01508
 
 */
 
-#define THRESHOLD 15
-#define FEATURES 12
-#define CLAUSES 10
-#define NUMBER_OF_STATES 100
-#define BOOST_TRUE_POSITIVE_FEEDBACK 0
-
-#define PREDICT 1
-#define UPDATE 0
+#include <stdint.h>
 
 struct TsetlinMachine {
+	int n_classes;
     int threshold;
     int n_literals;
     int n_clauses;
@@ -48,22 +42,26 @@ struct TsetlinMachine {
     int predict;
     int update;
 
-	int ***ta_state;  // shape: (n_clauses, n_literals, 2)
-	int *clause_output;  // shape: n_clauses
-	int *feedback_to_clauses;  // shape: n_clauses
+	int mid_state;
+	int8_t ***ta_state;  // shape: (n_clauses, n_literals, 2)
+	int16_t **weights;  // shape: (n_classes, n_clauses)
+	int **clause_output;  // shape: (n_classes, n_clauses)
+	int **feedback_to_clauses;  // shape: (n_classes, n_clauses)
 };
 
-struct TsetlinMachine *CreateTsetlinMachine(
-    int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
+struct TsetlinMachine *create_tsetlin_machine(
+    int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 );
+
+struct TsetlinMachine *load_tsetlin_machine(const char *filename);
 
 void free_tsetlin_machine(struct TsetlinMachine *tm);
 
-void tm_initialize(struct TsetlinMachine *tm);
-
 void tm_update(struct TsetlinMachine *tm, int *Xi, int target, float s);
 
-int tm_score(struct TsetlinMachine *tm, int *Xi);
+void tm_score(struct TsetlinMachine *tm, int *Xi, int *result);
 
 int tm_get_state(struct TsetlinMachine *tm, int clause, int feature, int automaton_type);
+
+int tm_get_weight(struct TsetlinMachine *tm, int class_id, int clause);
 
