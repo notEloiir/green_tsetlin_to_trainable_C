@@ -32,6 +32,7 @@ https://arxiv.org/abs/1804.01508
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "TsetlinMachine.h"
 
@@ -163,7 +164,7 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     struct TsetlinMachine *tm = create_tsetlin_machine(
         n_classes, threshold, n_literals, n_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
     if (!tm) {
-        perror("CreateMultiClassTsetlinMachine failed");
+        perror("create_tsetlin_machine failed");
         fclose(file);
         return NULL;
     }
@@ -297,10 +298,12 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], 
 /* Sum up the votes for each class (this is the multiclass version of the Tsetlin Machine) */
 static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_sum)
 {
+	memset((void *)classes_sum, 0, tm->n_classes*sizeof(int));
+	
 	for (int i = 0; i < tm->n_classes; i++) {
 		for (int j = 0; j < tm->n_clauses; j++) {
 			int sign = 1 - 2 * (j & 1);
-			classes_sum[i] += tm->clause_output[i][j]*sign;
+			classes_sum[i] += tm->clause_output[i][j]*sign * tm->weights[i][j];
 		}
 		
 		classes_sum[i] = (classes_sum[i] > tm->threshold) ? tm->threshold : classes_sum[i];

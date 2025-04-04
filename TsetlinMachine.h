@@ -49,16 +49,21 @@ struct TsetlinMachine {
 	int **feedback_to_clauses;  // shape: (n_classes, n_clauses)
 };
 
+
+// Create a Tsetlin Machine. Number of classes corresponds to number of bits in the TM output.
 struct TsetlinMachine *create_tsetlin_machine(
     int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 );
 
 struct TsetlinMachine *load_tsetlin_machine(const char *filename);
 
+// Deallocate all memory.
 void free_tsetlin_machine(struct TsetlinMachine *tm);
 
+// Train on a single data point.
 void tm_update(struct TsetlinMachine *tm, int *Xi, int target, float s);
 
+// Inference on a single data point. Writes to the result array of size (n_classes), elements in range [-threshold, threshold].
 void tm_score(struct TsetlinMachine *tm, int *Xi, int *result);
 
 int tm_get_state(struct TsetlinMachine *tm, int clause, int feature, int automaton_type);
