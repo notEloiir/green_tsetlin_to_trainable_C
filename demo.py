@@ -27,7 +27,7 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
           "min_state", min_state,
           "boost_true_positive_feedback", boost_true_positive_feedback,
           "weights", weights.shape, weights,
-          "clauses", clauses_reordered.shape, clauses_reordered,
+          "clauses (reordered)", clauses_reordered.shape, clauses_reordered,
           sep='\n')
 
     with open(filename, "wb") as f:
@@ -76,6 +76,9 @@ if __name__ == "__main__":
     threshold = 1000
     n_jobs = 2
     seed = 42
+
+    print(x[0])
+    print(y[0])
 
     tm = gt.TsetlinMachine(n_literals=n_literals, n_clauses=n_clauses, n_classes=n_classes, s=s,
                            threshold=threshold, literal_budget=n_literal_budget)

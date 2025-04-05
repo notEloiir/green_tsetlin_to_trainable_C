@@ -61,10 +61,10 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename);
 void free_tsetlin_machine(struct TsetlinMachine *tm);
 
 // Train on a single data point.
-void tm_update(struct TsetlinMachine *tm, int *Xi, int target, float s);
+void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s);
 
 // Inference on a single data point. Writes to the result array of size (n_classes), elements in range [-threshold, threshold].
-void tm_score(struct TsetlinMachine *tm, int *Xi, int *result);
+void tm_score(struct TsetlinMachine *tm, uint8_t *Xi, int *result);
 
 int tm_get_state(struct TsetlinMachine *tm, int clause, int feature, int automaton_type);
 

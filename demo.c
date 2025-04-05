@@ -70,7 +70,7 @@ void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, in
 		
 		uint8_t* example = &X[k * cols];
 		
-		tm_score(tm, (int *)example, result);
+		tm_score(tm, example, result);
 		
 		uint32_t best_class = 0;
 		int max_class_score = result[0];
@@ -80,7 +80,7 @@ void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, in
 				best_class = class_id;
 			}
 		}
-
+		
         if(best_class == y[k])
             correct += 1;
         
@@ -121,7 +121,7 @@ int main() {
     
     // Evaluate the loaded Tsetlin Machine
     printf("Evaluating model\n");
-    rows = 1000;  // Evaluate on 1000 first rows
+    rows = 10;  // Evaluate on 1000 first rows
     eval_model(tm, x_data, y_data, rows, cols);
 
 	// Clean up

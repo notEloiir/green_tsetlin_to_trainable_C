@@ -176,7 +176,7 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     
     for (int i = 0; i < n_classes; i++) {				
 		for (int j = 0; j < n_clauses; j++) {
-			tm->weights[i][j] = weights_flat[(i * n_classes) + j];
+			tm->weights[i][j] = weights_flat[(i * n_clauses) + j];
 		}
 	}
 
@@ -187,8 +187,8 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     
     for (int i = 0; i < n_clauses; i++) {				
 		for (int j = 0; j < n_literals; j++) {
-			tm->ta_state[i][j][0] = clauses_flat[((i * n_classes) + j) * 2];
-			tm->ta_state[i][j][1] = clauses_flat[(((i * n_classes) + j) * 2) + 1];
+			tm->ta_state[i][j][0] = clauses_flat[((i * n_literals) + j) * 2];
+			tm->ta_state[i][j][1] = clauses_flat[(((i * n_literals) + j) * 2) + 1];
 		}
 	}
 	
@@ -261,15 +261,15 @@ void tm_initialize(struct TsetlinMachine *tm)
 }
 
 /* Translates automata state to action */
-static inline int action(int state, int mid_state)
+static inline int action(int state, int weight, int mid_state)
 {
-		return state >= mid_state;
+		return (state * weight) >= mid_state;
 }
 
 /* Calculate the output of each clause using the actions of each Tsetline Automaton. */
 /* Output is stored an internal output array. */
 
-static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], int predict)
+static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *Xi, int predict)
 {
 	int action_include, action_include_negated;
 	int all_exclude;
@@ -279,8 +279,8 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], 
 			tm->clause_output[i][j] = 1;
 			all_exclude = 1;
 			for (int k = 0; k < tm->n_literals; k++) {
-				action_include = action(tm->ta_state[j][k][0], tm->mid_state);
-				action_include_negated = action(tm->ta_state[j][k][1], tm->mid_state);
+				action_include = action(tm->ta_state[j][k][0], tm->weights[i][j], tm->mid_state);
+				action_include_negated = action(tm->ta_state[j][k][1], tm->weights[i][j], tm->mid_state);
 	
 				all_exclude = all_exclude && !(action_include == 1 || action_include_negated == 1);
 	
@@ -289,7 +289,7 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, int Xi[], 
 					break;
 				}
 			}
-	
+			
 			tm->clause_output[i][j] = tm->clause_output[i][j] && !(predict == tm->predict && all_exclude == 1);
 		}
 	}
@@ -303,7 +303,7 @@ static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_su
 	for (int i = 0; i < tm->n_classes; i++) {
 		for (int j = 0; j < tm->n_clauses; j++) {
 			int sign = 1 - 2 * (j & 1);
-			classes_sum[i] += tm->clause_output[i][j]*sign * tm->weights[i][j];
+			classes_sum[i] += tm->clause_output[i][j]*sign;
 		}
 		
 		classes_sum[i] = (classes_sum[i] > tm->threshold) ? tm->threshold : classes_sum[i];
@@ -315,7 +315,7 @@ static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_su
 /*** Type I Feedback (Combats False Negatives) ***/
 /*************************************************/
 
-static inline void type_i_feedback(struct TsetlinMachine *tm, int *Xi, int i, int j, float s)
+static inline void type_i_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i, int j, float s)
 {
 	if (tm->clause_output[i][j] == 0) {
 		for (int k = 0; k < tm->n_literals; k++) {
@@ -343,14 +343,14 @@ static inline void type_i_feedback(struct TsetlinMachine *tm, int *Xi, int i, in
 /*** Type II Feedback (Combats False Positives) ***/
 /**************************************************/
 
-static inline void type_ii_feedback(struct TsetlinMachine *tm, int *Xi, int i, int j) {
+static inline void type_ii_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i, int j) {
 	int action_include;
 	int action_include_negated;
 
 	if (tm->clause_output[i][j] == 1) {
 		for (int k = 0; k < tm->n_literals; k++) { 
-			action_include = action(tm->ta_state[j][k][0], tm->mid_state);
-			action_include_negated = action(tm->ta_state[j][k][1], tm->mid_state);
+			action_include = action(tm->ta_state[j][k][0], tm->weights[i][j], tm->mid_state);
+			action_include_negated = action(tm->ta_state[j][k][1], tm->weights[i][j], tm->mid_state);
 
 			tm->ta_state[j][k][0] += (action_include == 0 && tm->ta_state[j][k][0] < tm->max_state) && (Xi[k] == 0);
 			tm->ta_state[j][k][1] += (action_include_negated == 0 && tm->ta_state[j][k][1] < tm->max_state) && (Xi[k] == 1);
@@ -365,7 +365,7 @@ static inline void type_ii_feedback(struct TsetlinMachine *tm, int *Xi, int i, i
 // The Tsetlin Machine can be trained incrementally, one training example at a time.
 // Use this method directly for online and incremental training.
 
-void tm_update(struct TsetlinMachine *tm, int *Xi, int target, float s) {
+void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 	/*******************************/
 	/*** Calculate Clause Output ***/
 	/*******************************/
@@ -412,7 +412,7 @@ void tm_update(struct TsetlinMachine *tm, int *Xi, int target, float s) {
 	}
 }
 
-void tm_score(struct TsetlinMachine *tm, int *Xi, int *result) {
+void tm_score(struct TsetlinMachine *tm, uint8_t *Xi, int *result) {
 	/*******************************/
 	/*** Calculate Clause Output ***/
 	/*******************************/
