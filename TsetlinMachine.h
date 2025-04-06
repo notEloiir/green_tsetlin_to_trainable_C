@@ -45,10 +45,12 @@ struct TsetlinMachine {
 	int mid_state;
 	int8_t ***ta_state;  // shape: (n_clauses, n_literals, 2)
 	int16_t **weights;  // shape: (n_classes, n_clauses)
-	int **clause_output;  // shape: (n_classes, n_clauses)
+	int *clause_output;  // shape: (n_clauses)
 	int **feedback_to_clauses;  // shape: (n_classes, n_clauses)
 };
 
+// Input shape: (n_literals)
+// Output shape: (n_classes)
 
 // Create a Tsetlin Machine. Number of classes corresponds to number of bits in the TM output.
 struct TsetlinMachine *create_tsetlin_machine(

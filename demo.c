@@ -86,7 +86,7 @@ void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, in
         
         total += 1;
     }
-    printf("correct: %d, total: %d, ratio: %f \n", correct, total, (float) correct / total);
+    printf("correct: %d, total: %d, ratio: %.2f \n", correct, total, (float) correct / total);
 }
 
 
@@ -121,11 +121,13 @@ int main() {
     
     // Evaluate the loaded Tsetlin Machine
     printf("Evaluating model\n");
-    rows = 10;  // Evaluate on 1000 first rows
+    rows = 1000;  // Evaluate on 1000 first rows
     eval_model(tm, x_data, y_data, rows, cols);
 
 	// Clean up
     free_tsetlin_machine(tm);
+    free(x_data);
+    free(y_data);
     
     return 0;
 }
