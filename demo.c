@@ -43,10 +43,10 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
     fclose(y_file);
 
     int h = 0;
-    for(int k = 0; k < cols; k++)
+    for(int col = 0; col < cols; col++)
     {
         //h += ((int)(x_data[k] * (k+1))) % 113;
-        h += (int)x_data[k];
+        h += (int)x_data[col];
     }
     printf("hash: %d\n", h);
     return;
@@ -56,32 +56,32 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
 void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, int cols) {
 	int correct = 0;
     int total = 0;
-    int *result = malloc(tm->n_classes * sizeof(int));
+    int *result = malloc(tm->num_classes * sizeof(int));
     if (result == NULL) {
         printf("Failed to allocate memory for result\n");
         exit(1);
     }
     
-    for(int k = 0; k < rows; ++k)
+    for(int row = 0; row < rows; ++row)
     {
-		if (k % 100 == 0 && k) {
-			printf("%d out of %d done\n", k, rows);
+		if (row % 100 == 0 && row) {
+			printf("%d out of %d done\n", row, rows);
 		}
 		
-		uint8_t* example = &X[k * cols];
+		uint8_t* example = &X[row * cols];
 		
 		tm_score(tm, example, result);
 		
 		uint32_t best_class = 0;
 		int max_class_score = result[0];
-		for (uint32_t class_id = 1; class_id < (uint32_t)tm->n_classes; class_id++) {
+		for (uint32_t class_id = 1; class_id < (uint32_t)tm->num_classes; class_id++) {
 			if (max_class_score < result[class_id]) {
 				max_class_score = result[class_id];
 				best_class = class_id;
 			}
 		}
 		
-        if(best_class == y[k])
+        if(best_class == y[row])
             correct += 1;
         
         total += 1;
@@ -100,9 +100,9 @@ int main() {
 	
 	// Print out hyperparameters
     printf("Threshold: %d\n", tm->threshold);
-    printf("Features: %d\n", tm->n_literals);
-    printf("Clauses: %d\n", tm->n_clauses);
-    printf("Classes: %d\n", tm->n_classes);
+    printf("Features: %d\n", tm->num_literals);
+    printf("Clauses: %d\n", tm->num_clauses);
+    printf("Classes: %d\n", tm->num_classes);
     printf("Max state: %d\n", tm->max_state);
     printf("Min state: %d\n", tm->min_state);
     printf("Boost: %d\n", tm->boost_true_positive_feedback);

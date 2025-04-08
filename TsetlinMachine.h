@@ -32,10 +32,10 @@ https://arxiv.org/abs/1804.01508
 #include <stdint.h>
 
 struct TsetlinMachine {
-	int n_classes;
+	int num_classes;
     int threshold;
-    int n_literals;
-    int n_clauses;
+    int num_literals;
+    int num_clauses;
     int max_state, min_state;
     int boost_true_positive_feedback;
 
@@ -43,18 +43,18 @@ struct TsetlinMachine {
     int update;
 
 	int mid_state;
-	int8_t ***ta_state;  // shape: (n_clauses, n_literals, 2)
-	int16_t **weights;  // shape: (n_classes, n_clauses)
-	int *clause_output;  // shape: (n_clauses)
-	int **feedback_to_clauses;  // shape: (n_classes, n_clauses)
+	int8_t ***ta_state;  // shape: (num_clauses, num_literals, 2)
+	int16_t **weights;  // shape: (num_classes, num_clauses)
+	int *clause_output;  // shape: (num_clauses)
+	int **clause_feedback;  // shape: (num_classes, num_clauses)
 };
 
-// Input shape: (n_literals)
-// Output shape: (n_classes)
+// Input shape: (num_literals)
+// Output shape: (num_classes)
 
 // Create a Tsetlin Machine. Number of classes corresponds to number of bits in the TM output.
 struct TsetlinMachine *create_tsetlin_machine(
-    int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
+    int num_classes, int threshold, int num_literals, int num_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update
 );
 
 struct TsetlinMachine *load_tsetlin_machine(const char *filename);
@@ -65,10 +65,10 @@ void free_tsetlin_machine(struct TsetlinMachine *tm);
 // Train on a single data point.
 void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s);
 
-// Inference on a single data point. Writes to the result array of size (n_classes), elements in range [-threshold, threshold].
+// Inference on a single data point. Writes to the result array of size (num_classes), elements in range [-threshold, threshold].
 void tm_score(struct TsetlinMachine *tm, uint8_t *Xi, int *result);
 
-int tm_get_state(struct TsetlinMachine *tm, int clause, int feature, int automaton_type);
+int tm_get_state(struct TsetlinMachine *tm, int clause_id, int literal_id, int automaton_type);
 
-int tm_get_weight(struct TsetlinMachine *tm, int class_id, int clause);
+int tm_get_weight(struct TsetlinMachine *tm, int class_id, int clause_id);
 

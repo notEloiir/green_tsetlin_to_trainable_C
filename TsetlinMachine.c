@@ -43,7 +43,7 @@ void tm_initialize(struct TsetlinMachine *tm);
 /**************************************/
 
 /*** Initialize Tsetlin Machine ***/
-struct TsetlinMachine *create_tsetlin_machine(int n_classes, int threshold, int n_literals, int n_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
+struct TsetlinMachine *create_tsetlin_machine(int num_classes, int threshold, int num_literals, int num_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
 {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
@@ -51,10 +51,10 @@ struct TsetlinMachine *create_tsetlin_machine(int n_classes, int threshold, int 
 		return NULL;
 	}
 	
-	tm->n_classes = n_classes;
+	tm->num_classes = num_classes;
 	tm->threshold = threshold;
-	tm->n_literals = n_literals;
-	tm->n_clauses = n_clauses;
+	tm->num_literals = num_literals;
+	tm->num_clauses = num_clauses;
 	tm->max_state = max_state;
 	tm->min_state = min_state;
 	tm->boost_true_positive_feedback = boost_true_positive_feedback;
@@ -62,22 +62,22 @@ struct TsetlinMachine *create_tsetlin_machine(int n_classes, int threshold, int 
 	tm->predict = predict;
 	tm->update = update;
 	
-	tm->ta_state = (int8_t ***)malloc(n_clauses * sizeof(int8_t **));  // shape: (n_clauses, n_features, 2)
+	tm->ta_state = (int8_t ***)malloc(num_clauses * sizeof(int8_t **));  // shape: (num_clauses, n_features, 2)
 	if (tm->ta_state == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
 	}
-	for (int i = 0; i < n_clauses; i++) {
-		tm->ta_state[i] = (int8_t **)malloc(n_literals * sizeof(int8_t *));
-		if (tm->ta_state[i] == NULL) {
+	for (int clause_id = 0; clause_id < num_clauses; clause_id++) {
+		tm->ta_state[clause_id] = (int8_t **)malloc(num_literals * sizeof(int8_t *));
+		if (tm->ta_state[clause_id] == NULL) {
 			perror("Memory allocation failed");
 			free_tsetlin_machine(tm);
 			return NULL;
 		}
-		for (int j = 0; j < n_literals; j++) {
-			tm->ta_state[i][j] = (int8_t *)malloc(2 * sizeof(int8_t));
-			if (tm->ta_state[i][j] == NULL) {
+		for (int literal_id = 0; literal_id < num_literals; literal_id++) {
+			tm->ta_state[clause_id][literal_id] = (int8_t *)malloc(2 * sizeof(int8_t));
+			if (tm->ta_state[clause_id][literal_id] == NULL) {
 				perror("Memory allocation failed");
 				free_tsetlin_machine(tm);
 				return NULL;
@@ -85,37 +85,37 @@ struct TsetlinMachine *create_tsetlin_machine(int n_classes, int threshold, int 
 		}
 	}
 	
-	tm->weights = (int16_t **)malloc(n_classes * sizeof(int16_t *));  // shape: (n_classes, n_clauses)
+	tm->weights = (int16_t **)malloc(num_classes * sizeof(int16_t *));  // shape: (num_classes, num_clauses)
 	if (tm->weights == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
 	}
-	for (int i = 0; i < n_classes; i++) {
-		tm->weights[i] = (int16_t *)malloc(n_clauses * sizeof(int16_t));
-		if (tm->weights[i] == NULL) {
+	for (int class_id = 0; class_id < num_classes; class_id++) {
+		tm->weights[class_id] = (int16_t *)malloc(num_clauses * sizeof(int16_t));
+		if (tm->weights[class_id] == NULL) {
 			perror("Memory allocation failed");
 			free_tsetlin_machine(tm);
 			return NULL;
 		}
 	}
 	
-	tm->clause_output = (int *)malloc(n_clauses * sizeof(int));  // shape: (n_clauses)
+	tm->clause_output = (int *)malloc(num_clauses * sizeof(int));  // shape: (num_clauses)
 	if (tm->clause_output == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
 	}
 	
-	tm->feedback_to_clauses = (int **)malloc(n_classes * sizeof(int *));  // shape: (n_classes, n_clauses)
-	if (tm->feedback_to_clauses == NULL) {
+	tm->clause_feedback = (int **)malloc(num_classes * sizeof(int *));  // shape: (num_classes, num_clauses)
+	if (tm->clause_feedback == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
 	}
-	for (int i = 0; i < n_classes; i++) {
-		tm->feedback_to_clauses[i] = (int *)malloc(n_clauses * sizeof(int *));
-		if (tm->feedback_to_clauses[i] == NULL) {
+	for (int class_id = 0; class_id < num_classes; class_id++) {
+		tm->clause_feedback[class_id] = (int *)malloc(num_clauses * sizeof(int *));
+		if (tm->clause_feedback[class_id] == NULL) {
 			perror("Memory allocation failed");
 			free_tsetlin_machine(tm);
 			return NULL;
@@ -140,21 +140,21 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     }
     
     int threshold;
-    int n_literals, n_clauses, n_classes;
+    int num_literals, num_clauses, num_classes;
     int max_state, min_state;
     int boost_true_positive_feedback;
 
     // Read metadata
     fread(&threshold, sizeof(int), 1, file);
-    fread(&n_literals, sizeof(int), 1, file);
-    fread(&n_clauses, sizeof(int), 1, file);
-    fread(&n_classes, sizeof(int), 1, file);
+    fread(&num_literals, sizeof(int), 1, file);
+    fread(&num_clauses, sizeof(int), 1, file);
+    fread(&num_classes, sizeof(int), 1, file);
     fread(&max_state, sizeof(int), 1, file);
     fread(&min_state, sizeof(int), 1, file);
     fread(&boost_true_positive_feedback, sizeof(int), 1, file); 
     
     struct TsetlinMachine *tm = create_tsetlin_machine(
-        n_classes, threshold, n_literals, n_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
+        num_classes, threshold, num_literals, num_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
     if (!tm) {
         perror("create_tsetlin_machine failed");
         fclose(file);
@@ -162,25 +162,25 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     }
 
     // Allocate and read weights
-    size_t weights_size = n_classes * n_clauses * sizeof(int16_t);
+    size_t weights_size = num_classes * num_clauses * sizeof(int16_t);
     int16_t weights_flat[weights_size];
     fread(weights_flat, weights_size, 1, file);
     
-    for (int i = 0; i < n_classes; i++) {				
-		for (int j = 0; j < n_clauses; j++) {
-			tm->weights[i][j] = weights_flat[(i * n_clauses) + j];
+    for (int class_id = 0; class_id < num_classes; class_id++) {				
+		for (int clause_id = 0; clause_id < num_clauses; clause_id++) {
+			tm->weights[class_id][clause_id] = weights_flat[(class_id * num_clauses) + clause_id];
 		}
 	}
 
     // Allocate and read clauses
-    size_t clauses_size = n_clauses * n_literals * 2 * sizeof(int8_t);
+    size_t clauses_size = num_clauses * num_literals * 2 * sizeof(int8_t);
     int8_t clauses_flat[clauses_size];
     fread(clauses_flat, clauses_size, 1, file);
     
-    for (int i = 0; i < n_clauses; i++) {				
-		for (int j = 0; j < n_literals; j++) {
-			tm->ta_state[i][j][0] = clauses_flat[((i * n_literals) + j) * 2];
-			tm->ta_state[i][j][1] = clauses_flat[(((i * n_literals) + j) * 2) + 1];
+    for (int clause_id = 0; clause_id < num_clauses; clause_id++) {				
+		for (int literal_id = 0; literal_id < num_literals; literal_id++) {
+			tm->ta_state[clause_id][literal_id][0] = clauses_flat[((clause_id * num_literals) + literal_id) * 2];
+			tm->ta_state[clause_id][literal_id][1] = clauses_flat[(((clause_id * num_literals) + literal_id) * 2) + 1];
 		}
 	}
 	
@@ -192,23 +192,23 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
 void free_tsetlin_machine(struct TsetlinMachine *tm) {
 	if (tm != NULL){
 		if (tm->ta_state != NULL) {
-			for (int i = 0; i < tm->n_clauses; i++) {
-				if (tm->ta_state[i] != NULL) {
-					for (int j = 0; j < tm->n_literals; j++) {
-						if (tm->ta_state[i][j] != NULL) {
-							free(tm->ta_state[i][j]);
+			for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+				if (tm->ta_state[clause_id] != NULL) {
+					for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
+						if (tm->ta_state[clause_id][literal_id] != NULL) {
+							free(tm->ta_state[clause_id][literal_id]);
 						}
 					}
-					free(tm->ta_state[i]);
+					free(tm->ta_state[clause_id]);
 				}
 			}
 			free(tm->ta_state);
 		}
 		
 		if (tm->weights != NULL) {
-			for (int i = 0; i < tm->n_classes; i++) {
-				if (tm->weights[i] != NULL) {
-					free(tm->weights[i]);
+			for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+				if (tm->weights[class_id] != NULL) {
+					free(tm->weights[class_id]);
 				}
 			}
 			free(tm->weights);
@@ -218,8 +218,8 @@ void free_tsetlin_machine(struct TsetlinMachine *tm) {
 			free(tm->clause_output);
 		}
 		
-		if (tm->feedback_to_clauses != NULL) {
-			free(tm->feedback_to_clauses);
+		if (tm->clause_feedback != NULL) {
+			free(tm->clause_feedback);
 		}
 		
 		free(tm);
@@ -233,21 +233,21 @@ void tm_initialize(struct TsetlinMachine *tm)
 {
     tm->mid_state = (tm->max_state + tm->min_state) / 2;
 
-	for (int j = 0; j < tm->n_clauses; j++) {				
-		for (int k = 0; k < tm->n_literals; k++) {
+	for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {				
+		for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
 			if (1.0 * rand()/RAND_MAX <= 0.5) {
-				tm->ta_state[j][k][0] = tm->mid_state - 1;
-				tm->ta_state[j][k][1] = tm->mid_state;
+				tm->ta_state[clause_id][literal_id][0] = tm->mid_state - 1;
+				tm->ta_state[clause_id][literal_id][1] = tm->mid_state;
 			} else {
-				tm->ta_state[j][k][0] = tm->mid_state;
-				tm->ta_state[j][k][1] = tm->mid_state - 1; // Deviation, should be random  // What was this comment about
+				tm->ta_state[clause_id][literal_id][0] = tm->mid_state;
+				tm->ta_state[clause_id][literal_id][1] = tm->mid_state - 1; // Deviation, should be random  // What was this comment about
 			}
 		}
 	}
 	
-	for (int i = 0; i < tm->n_classes; i++) {
-		for (int j = 0; j < tm->n_clauses; j++) {
-			tm->weights[i][j] = 1;  // TODO: ?
+	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+			tm->weights[class_id][clause_id] = 1;  // TODO: ?
 		}
 	}
 }
@@ -266,17 +266,17 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X
 	int action_include, action_include_negated;
 	int empty_clause;
 
-	for (int j = 0; j < tm->n_clauses; j++) {
-		tm->clause_output[j] = 1;
+	for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+		tm->clause_output[clause_id] = 1;
 		empty_clause = 1;
-		for (int k = 0; k < tm->n_literals; k++) {
-			action_include = action(tm->ta_state[j][k][0], tm->mid_state);
-			action_include_negated = action(tm->ta_state[j][k][1], tm->mid_state);
+		for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
+			action_include = action(tm->ta_state[clause_id][literal_id][0], tm->mid_state);
+			action_include_negated = action(tm->ta_state[clause_id][literal_id][1], tm->mid_state);
 			
 			empty_clause = (empty_clause && (action_include || action_include_negated));
 
-			if ((action_include == 1 && Xi[k] == 0) || (action_include_negated == 1 && Xi[k] == 1) || empty_clause) {
-				tm->clause_output[j] = 0;
+			if ((action_include == 1 && Xi[literal_id] == 0) || (action_include_negated == 1 && Xi[literal_id] == 1) || empty_clause) {
+				tm->clause_output[clause_id] = 0;
 				break;
 			}
 		}
@@ -286,21 +286,21 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X
 /* Sum up the votes for each class (this is the multiclass version of the Tsetlin Machine) */
 static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_sum)
 {
-	memset((void *)classes_sum, 0, tm->n_classes*sizeof(int));
+	memset((void *)classes_sum, 0, tm->num_classes*sizeof(int));
 	
-	for (int j = 0; j < tm->n_clauses; j++) {
-		if (tm->clause_output[j] == 0) {
+	for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+		if (tm->clause_output[clause_id] == 0) {
 			continue;
 		}
 		
-		for (int i = 0; i < tm->n_classes; i++) {
-			classes_sum[i] += tm->weights[i][j];
+		for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+			classes_sum[class_id] += tm->weights[class_id][clause_id];
 		}
 	}
 	
-	for (int i = 0; i < tm->n_classes; i++) {
-		classes_sum[i] = (classes_sum[i] > tm->threshold) ? tm->threshold : classes_sum[i];
-		classes_sum[i] = (classes_sum[i] < -tm->threshold) ? -tm->threshold : classes_sum[i];
+	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+		classes_sum[class_id] = (classes_sum[class_id] > tm->threshold) ? tm->threshold : classes_sum[class_id];
+		classes_sum[class_id] = (classes_sum[class_id] < -tm->threshold) ? -tm->threshold : classes_sum[class_id];
 	}
 }
 
@@ -308,17 +308,18 @@ static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_su
 /*** Type I Feedback (Combats False Negatives) ***/
 /*************************************************/
 
-static inline void type_i_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i, int j, float s)
+static inline void type_i_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int class_id, int clause_id, float s)
 {
-	// TODO: do this for class i with its weights
+	// TODO: do this for class class_id with its weights
+	/*
 	if (tm->clause_output[j] == 0) {
-		for (int k = 0; k < tm->n_literals; k++) {
+		for (int k = 0; k < tm->num_literals; k++) {
 			tm->ta_state[j][k][0] -= (tm->ta_state[j][k][0] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 								
 			tm->ta_state[j][k][1] -= (tm->ta_state[j][k][1] > tm->min_state) && (1.0*rand()/RAND_MAX <= 1.0/s);
 		}
 	} else if (tm->clause_output[j] == 1) {
-		for (int k = 0; k < tm->n_literals; k++) {
+		for (int k = 0; k < tm->num_literals; k++) {
 			if (Xi[k] == 1) {
 				tm->ta_state[j][k][0] += (tm->ta_state[j][k][0] < tm->max_state) && (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= (s-1)/s);
 
@@ -330,6 +331,7 @@ static inline void type_i_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i
 			}
 		}
 	}
+	*/
 }
 
 
@@ -337,13 +339,14 @@ static inline void type_i_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i
 /*** Type II Feedback (Combats False Positives) ***/
 /**************************************************/
 
-static inline void type_ii_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int i, int j) {
-	// TODO: do this for class i with its weights
+static inline void type_ii_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int class_id, int clause_id) {
+	// TODO: do this for class class_id with its weights
+	/*
 	int action_include;
 	int action_include_negated;
 
 	if (tm->clause_output[j] == 1) {
-		for (int k = 0; k < tm->n_literals; k++) { 
+		for (int k = 0; k < tm->num_literals; k++) { 
 			action_include = action(tm->ta_state[j][k][0], tm->mid_state);
 			action_include_negated = action(tm->ta_state[j][k][1], tm->mid_state);
 
@@ -351,6 +354,7 @@ static inline void type_ii_feedback(struct TsetlinMachine *tm, uint8_t *Xi, int 
 			tm->ta_state[j][k][1] += (action_include_negated == 0 && tm->ta_state[j][k][1] < tm->max_state) && (Xi[k] == 1);
 		}
 	}
+	*/
 }
 
 /******************************************/
@@ -371,7 +375,7 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 	/*** Sum up Clause Votes ***/
 	/***************************/
 
-	int *classes_sum = (int *)malloc(tm->n_classes * sizeof(int));
+	int *classes_sum = (int *)malloc(tm->num_classes * sizeof(int));
 	if (classes_sum == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
@@ -385,9 +389,9 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 	/*************************************/
 
 	// Calculate feedback to clauses
-	for (int i = 0; i < tm->n_classes; i++) {
-		for (int j = 0; j < tm->n_clauses; j++) {
-			tm->feedback_to_clauses[i][j] = (2*target-1)*(1 - 2 * (j & 1))*(1.0*rand()/RAND_MAX <= (1.0/(tm->threshold*2))*(tm->threshold + (1 - 2*target)*classes_sum[i]));
+	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+			tm->clause_feedback[class_id][clause_id] = (2*target-1)*(1 - 2 * (clause_id & 1))*(1.0*rand()/RAND_MAX <= (1.0/(tm->threshold*2))*(tm->threshold + (1 - 2*target)*classes_sum[class_id]));
 		}
 	}
 	free(classes_sum);
@@ -396,12 +400,12 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 	/*** Train Individual Automata ***/
 	/*********************************/
 
-	for (int i = 0; i < tm->n_classes; i++) {
-		for (int j = 0; j < tm->n_clauses; j++) {
-			if (tm->feedback_to_clauses[i][j] > 0) {
-				type_i_feedback(tm, Xi, i, j, s);
-			} else if (tm->feedback_to_clauses[i][j] < 0) {
-				type_ii_feedback(tm, Xi, i, j);
+	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+			if (tm->clause_feedback[class_id][clause_id] > 0) {
+				type_i_feedback(tm, Xi, class_id, clause_id, s);
+			} else if (tm->clause_feedback[class_id][clause_id] < 0) {
+				type_ii_feedback(tm, Xi, class_id, clause_id);
 			}
 		}
 	}
