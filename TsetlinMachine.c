@@ -62,42 +62,18 @@ struct TsetlinMachine *create_tsetlin_machine(int num_classes, int threshold, in
 	tm->predict = predict;
 	tm->update = update;
 	
-	tm->ta_state = (int8_t ***)malloc(num_clauses * sizeof(int8_t **));  // shape: (num_clauses, n_features, 2)
+	tm->ta_state = (int8_t *)malloc(num_clauses * num_literals * 2 * sizeof(int8_t));  // shape: flat (num_clauses, num_literals, 2)
 	if (tm->ta_state == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
 	}
-	for (int clause_id = 0; clause_id < num_clauses; clause_id++) {
-		tm->ta_state[clause_id] = (int8_t **)malloc(num_literals * sizeof(int8_t *));
-		if (tm->ta_state[clause_id] == NULL) {
-			perror("Memory allocation failed");
-			free_tsetlin_machine(tm);
-			return NULL;
-		}
-		for (int literal_id = 0; literal_id < num_literals; literal_id++) {
-			tm->ta_state[clause_id][literal_id] = (int8_t *)malloc(2 * sizeof(int8_t));
-			if (tm->ta_state[clause_id][literal_id] == NULL) {
-				perror("Memory allocation failed");
-				free_tsetlin_machine(tm);
-				return NULL;
-			}
-		}
-	}
 	
-	tm->weights = (int16_t **)malloc(num_classes * sizeof(int16_t *));  // shape: (num_classes, num_clauses)
+	tm->weights = (int16_t *)malloc(num_classes * num_clauses * sizeof(int16_t));  // shape: flat (num_classes, num_clauses)
 	if (tm->weights == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
-	}
-	for (int class_id = 0; class_id < num_classes; class_id++) {
-		tm->weights[class_id] = (int16_t *)malloc(num_clauses * sizeof(int16_t));
-		if (tm->weights[class_id] == NULL) {
-			perror("Memory allocation failed");
-			free_tsetlin_machine(tm);
-			return NULL;
-		}
 	}
 	
 	tm->clause_output = (int *)malloc(num_clauses * sizeof(int));  // shape: (num_clauses)
@@ -107,19 +83,11 @@ struct TsetlinMachine *create_tsetlin_machine(int num_classes, int threshold, in
 		return NULL;
 	}
 	
-	tm->clause_feedback = (int **)malloc(num_classes * sizeof(int *));  // shape: (num_classes, num_clauses)
+	tm->clause_feedback = (int *)malloc(num_classes * num_clauses * sizeof(int));  // shape: (num_classes, num_clauses)
 	if (tm->clause_feedback == NULL) {
 		perror("Memory allocation failed");
 		free_tsetlin_machine(tm);
 		return NULL;
-	}
-	for (int class_id = 0; class_id < num_classes; class_id++) {
-		tm->clause_feedback[class_id] = (int *)malloc(num_clauses * sizeof(int *));
-		if (tm->clause_feedback[class_id] == NULL) {
-			perror("Memory allocation failed");
-			free_tsetlin_machine(tm);
-			return NULL;
-		}
 	}
 
 	/* Set up the Tsetlin Machine structure */
@@ -163,26 +131,11 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
 
     // Allocate and read weights
     size_t weights_size = num_classes * num_clauses * sizeof(int16_t);
-    int16_t weights_flat[weights_size];
-    fread(weights_flat, weights_size, 1, file);
-    
-    for (int class_id = 0; class_id < num_classes; class_id++) {				
-		for (int clause_id = 0; clause_id < num_clauses; clause_id++) {
-			tm->weights[class_id][clause_id] = weights_flat[(class_id * num_clauses) + clause_id];
-		}
-	}
+    fread(tm->weights, weights_size, 1, file);
 
     // Allocate and read clauses
     size_t clauses_size = num_clauses * num_literals * 2 * sizeof(int8_t);
-    int8_t clauses_flat[clauses_size];
-    fread(clauses_flat, clauses_size, 1, file);
-    
-    for (int clause_id = 0; clause_id < num_clauses; clause_id++) {				
-		for (int literal_id = 0; literal_id < num_literals; literal_id++) {
-			tm->ta_state[clause_id][literal_id][0] = clauses_flat[((clause_id * num_literals) + literal_id) * 2];
-			tm->ta_state[clause_id][literal_id][1] = clauses_flat[(((clause_id * num_literals) + literal_id) * 2) + 1];
-		}
-	}
+    fread(tm->ta_state, clauses_size, 1, file);
 	
     fclose(file);
     return tm;
@@ -192,25 +145,10 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
 void free_tsetlin_machine(struct TsetlinMachine *tm) {
 	if (tm != NULL){
 		if (tm->ta_state != NULL) {
-			for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-				if (tm->ta_state[clause_id] != NULL) {
-					for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-						if (tm->ta_state[clause_id][literal_id] != NULL) {
-							free(tm->ta_state[clause_id][literal_id]);
-						}
-					}
-					free(tm->ta_state[clause_id]);
-				}
-			}
 			free(tm->ta_state);
 		}
 		
 		if (tm->weights != NULL) {
-			for (int class_id = 0; class_id < tm->num_classes; class_id++) {
-				if (tm->weights[class_id] != NULL) {
-					free(tm->weights[class_id]);
-				}
-			}
 			free(tm->weights);
 		}
 		
@@ -236,18 +174,20 @@ void tm_initialize(struct TsetlinMachine *tm)
 	for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {				
 		for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
 			if (1.0 * rand()/RAND_MAX <= 0.5) {
-				tm->ta_state[clause_id][literal_id][0] = tm->mid_state - 1;
-				tm->ta_state[clause_id][literal_id][1] = tm->mid_state;
+				// positive literal
+				tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0] = tm->mid_state - 1;
+				// negative literal
+				tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] = tm->mid_state;
 			} else {
-				tm->ta_state[clause_id][literal_id][0] = tm->mid_state;
-				tm->ta_state[clause_id][literal_id][1] = tm->mid_state - 1; // Deviation, should be random  // What was this comment about
+				tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0] = tm->mid_state;
+				tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] = tm->mid_state - 1;
 			}
 		}
 	}
 	
 	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
 		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-			tm->weights[class_id][clause_id] = 1;  // TODO: ?
+			tm->weights[(class_id * tm->num_clauses) + clause_id] = 1;  // TODO: ?
 		}
 	}
 }
@@ -270,8 +210,8 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X
 		tm->clause_output[clause_id] = 1;
 		empty_clause = 1;
 		for (int literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-			action_include = action(tm->ta_state[clause_id][literal_id][0], tm->mid_state);
-			action_include_negated = action(tm->ta_state[clause_id][literal_id][1], tm->mid_state);
+			action_include = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0], tm->mid_state);
+			action_include_negated = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state);
 			
 			empty_clause = (empty_clause && (action_include || action_include_negated));
 
@@ -294,7 +234,7 @@ static inline void sum_up_class_votes(struct TsetlinMachine *tm, int *classes_su
 		}
 		
 		for (int class_id = 0; class_id < tm->num_classes; class_id++) {
-			classes_sum[class_id] += tm->weights[class_id][clause_id];
+			classes_sum[class_id] += tm->weights[(class_id * tm->num_clauses) + clause_id];
 		}
 	}
 	
@@ -391,7 +331,7 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 	// Calculate feedback to clauses
 	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
 		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-			tm->clause_feedback[class_id][clause_id] = (2*target-1)*(1 - 2 * (clause_id & 1))*(1.0*rand()/RAND_MAX <= (1.0/(tm->threshold*2))*(tm->threshold + (1 - 2*target)*classes_sum[class_id]));
+			tm->clause_feedback[(class_id * tm->num_clauses) + clause_id] = (2*target-1)*(1 - 2 * (clause_id & 1))*(1.0*rand()/RAND_MAX <= (1.0/(tm->threshold*2))*(tm->threshold + (1 - 2*target)*classes_sum[class_id]));
 		}
 	}
 	free(classes_sum);
@@ -402,9 +342,9 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *Xi, int target, float s) {
 
 	for (int class_id = 0; class_id < tm->num_classes; class_id++) {
 		for (int clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-			if (tm->clause_feedback[class_id][clause_id] > 0) {
+			if (tm->clause_feedback[(class_id * tm->num_clauses) + clause_id] > 0) {
 				type_i_feedback(tm, Xi, class_id, clause_id, s);
-			} else if (tm->clause_feedback[class_id][clause_id] < 0) {
+			} else if (tm->clause_feedback[(class_id * tm->num_clauses) + clause_id] < 0) {
 				type_ii_feedback(tm, Xi, class_id, clause_id);
 			}
 		}
@@ -425,11 +365,11 @@ void tm_score(struct TsetlinMachine *tm, uint8_t *Xi, int *result) {
 	sum_up_class_votes(tm, result);
 }
 
-int tm_get_state(struct TsetlinMachine *tm, int clause, int feature, int automaton_type) {
-	return tm->ta_state[clause][feature][automaton_type];
+int tm_get_state(struct TsetlinMachine *tm, int clause_id, int literal_id, int automaton_type) {
+	return tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + automaton_type];
 }
 
-int tm_get_weight(struct TsetlinMachine *tm, int class_id, int clause) {
-	return tm->weights[class_id][clause];
+int tm_get_weight(struct TsetlinMachine *tm, int class_id, int clause_id) {
+	return tm->weights[(class_id * tm->num_clauses) + clause_id];
 }
 

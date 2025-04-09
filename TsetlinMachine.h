@@ -43,10 +43,10 @@ struct TsetlinMachine {
     int update;
 
 	int mid_state;
-	int8_t ***ta_state;  // shape: (num_clauses, num_literals, 2)
-	int16_t **weights;  // shape: (num_classes, num_clauses)
+	int8_t *ta_state;  // shape: flat (num_clauses, num_literals, 2)
+	int16_t *weights;  // shape: flat (num_classes, num_clauses)
 	int *clause_output;  // shape: (num_clauses)
-	int **clause_feedback;  // shape: (num_classes, num_clauses)
+	int *clause_feedback;  // shape: flat (num_classes, num_clauses)
 };
 
 // Input shape: (num_literals)
