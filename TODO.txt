@@ -1,5 +1,4 @@
-- train weights in feedback, modify feedback to work with current format
+- implement feedback (based on previous implementation)
 - change int to int32_t or uint32_t or something
-- benchmark if flattened arrays are faster
 - move eval_model() from demo.c to TsetlinMachine, standardize
 - organize files into dirs

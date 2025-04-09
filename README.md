@@ -1,7 +1,7 @@
 # green_tsetlin to trainable C  
 Move model from green_tsetlin to a file, then interpret it in C.  
 From: https://github.com/ooki/green_tsetlin  
-To: https://github.com/cair/TsetlinMachineC  
+To a custom interpreter, originally based on: https://github.com/cair/TsetlinMachineC  
 
 # Requirements  
 - python  
