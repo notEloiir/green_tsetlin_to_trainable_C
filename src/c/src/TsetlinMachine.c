@@ -17,8 +17,11 @@ void tm_initialize(struct TsetlinMachine *tm);
 /**************************************/
 
 /*** Initialize Tsetlin Machine ***/
-struct TsetlinMachine *create_tsetlin_machine(int num_classes, int threshold, int num_literals, int num_clauses, int max_state, int min_state, int boost_true_positive_feedback, int predict, int update)
-{
+struct TsetlinMachine *create_tsetlin_machine(
+	int num_classes, int threshold, int num_literals, int num_clauses,
+	int max_state, int min_state, int boost_true_positive_feedback,
+	enum output_type y_type, int predict, int update
+) {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
 		perror("Memory allocation failed");
@@ -32,6 +35,7 @@ struct TsetlinMachine *create_tsetlin_machine(int num_classes, int threshold, in
 	tm->max_state = max_state;
 	tm->min_state = min_state;
 	tm->boost_true_positive_feedback = boost_true_positive_feedback;
+	tm->y_type = y_type;
 	
 	tm->predict = predict;
 	tm->update = update;
@@ -96,7 +100,10 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     fread(&boost_true_positive_feedback, sizeof(int), 1, file); 
     
     struct TsetlinMachine *tm = create_tsetlin_machine(
-        num_classes, threshold, num_literals, num_clauses, max_state, min_state, boost_true_positive_feedback, 1, 0);
+        num_classes, threshold, num_literals, num_clauses,
+		max_state, min_state, boost_true_positive_feedback,
+		CLASS_IDX, 1, 0
+	);
     if (!tm) {
         perror("create_tsetlin_machine failed");
         fclose(file);
@@ -337,6 +344,58 @@ void tm_score(struct TsetlinMachine *tm, uint8_t *Xi, int *result) {
 	/***************************/
 
 	sum_up_class_votes(tm, result);
+}
+
+void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, int cols) {
+	int correct = 0;
+    int total = 0;
+    int *y_pred = malloc(tm->num_classes * sizeof(int));
+    if (y_pred == NULL) {
+        printf("Failed to allocate memory for y_pred\n");
+        exit(1);
+    }
+    
+    for(int row = 0; row < rows; ++row)
+    {
+		if (row % 1000 == 0 && row) {
+			printf("%d out of %d done\n", row, rows);
+		}
+		
+		uint8_t* datapoint = &X[row * cols];
+		
+		tm_score(tm, datapoint, y_pred);
+		
+		if (tm->y_type == CLASS_IDX) {
+			uint32_t best_class = 0;
+			int max_class_score = y_pred[0];
+			for (uint32_t class_id = 1; class_id < (uint32_t)tm->num_classes; class_id++) {
+				if (max_class_score < y_pred[class_id]) {
+					max_class_score = y_pred[class_id];
+					best_class = class_id;
+				}
+			}
+			
+			if(best_class == y[row]) {
+				correct++;
+			}
+		}
+		else if (tm->y_type == BINARY_VECTOR) {
+			correct++;
+			for (int class_id = 0; class_id < tm->num_classes; class_id++) {
+				if (y[(row * tm->num_classes) + class_id] != y_pred[class_id]) {
+					correct--;
+					break;
+				}
+			}
+		}
+		else {
+			printf("y_type not implemented in eval_model\n");
+        	exit(1);
+		}
+        
+        total++;
+    }
+    printf("correct: %d, total: %d, ratio: %.2f \n", correct, total, (float) correct / total);
 }
 
 int tm_get_state(struct TsetlinMachine *tm, int clause_id, int literal_id, int automaton_type) {

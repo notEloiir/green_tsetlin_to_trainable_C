@@ -53,43 +53,6 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
 }
 
 
-void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, int cols) {
-	int correct = 0;
-    int total = 0;
-    int *result = malloc(tm->num_classes * sizeof(int));
-    if (result == NULL) {
-        printf("Failed to allocate memory for result\n");
-        exit(1);
-    }
-    
-    for(int row = 0; row < rows; ++row)
-    {
-		if (row % 100 == 0 && row) {
-			printf("%d out of %d done\n", row, rows);
-		}
-		
-		uint8_t* example = &X[row * cols];
-		
-		tm_score(tm, example, result);
-		
-		uint32_t best_class = 0;
-		int max_class_score = result[0];
-		for (uint32_t class_id = 1; class_id < (uint32_t)tm->num_classes; class_id++) {
-			if (max_class_score < result[class_id]) {
-				max_class_score = result[class_id];
-				best_class = class_id;
-			}
-		}
-		
-        if(best_class == y[row])
-            correct += 1;
-        
-        total += 1;
-    }
-    printf("correct: %d, total: %d, ratio: %.2f \n", correct, total, (float) correct / total);
-}
-
-
 int main() {
     const char *file_path = "data/models/mnist_tm.bin";
     struct TsetlinMachine *tm = load_tsetlin_machine(file_path);
@@ -121,7 +84,7 @@ int main() {
     
     // Evaluate the loaded Tsetlin Machine
     printf("Evaluating model\n");
-    rows = 1000;  // Evaluate on 1000 first rows
+    rows = 5000;  // Evaluate on first 5000 rows
     eval_model(tm, x_data, y_data, rows, cols);
 
 	// Clean up
