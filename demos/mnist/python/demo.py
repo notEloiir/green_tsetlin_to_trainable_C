@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 import green_tsetlin as gt
 import numpy as np
 from sklearn.datasets import fetch_openml
@@ -12,8 +13,13 @@ from gt_to_bin import save_to_bin
 
 
 if __name__ == "__main__":
-    fetch_mnist = False
-    if fetch_mnist:
+    n_examples = 70000
+    n_literals = 784
+    mnist_x_path = Path("data/demos/mnist/mnist_x_{}_{}.test_bin".format(n_examples, n_literals))
+    mnist_y_path = Path("data/demos/mnist/mnist_y_{}_{}.test_bin".format(n_examples, n_literals))
+
+    if not (mnist_x_path.exists() and mnist_y_path.exists()):
+        print("Fetching MNIST data")
         X, y = fetch_openml(
             "mnist_784",
             version=1,

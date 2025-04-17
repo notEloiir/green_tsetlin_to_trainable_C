@@ -22,4 +22,4 @@ run_demo_py:
 
 # === Cleanup ===
 clean:
-	rm -f $(BUILD_DIR)/* src/python/__pycache__
+	rm -rf $(BUILD_DIR)/* rmdir src/python/__pycache__
