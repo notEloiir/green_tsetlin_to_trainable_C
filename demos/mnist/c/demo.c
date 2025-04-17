@@ -9,7 +9,7 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
 	int rows = 70000;
 	int cols = 784;
 	
-	FILE *x_file = fopen("mnist_x_70000_784.test_bin", "rb");
+	FILE *x_file = fopen("data/demos/mnist/mnist_x_70000_784.test_bin", "rb");
     if (x_file == NULL) {
         printf("Failed to open x file\n");
         exit(1);
@@ -26,7 +26,7 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
     fclose(x_file);
 
     // Read y values
-    FILE *y_file = fopen("mnist_y_70000_784.test_bin", "rb");
+    FILE *y_file = fopen("data/demos/mnist/mnist_y_70000_784.test_bin", "rb");
     if (y_file == NULL) {
         printf("Failed to open y file\n");
         free(x_data);
@@ -91,8 +91,8 @@ void eval_model(struct TsetlinMachine *tm, uint8_t *X, uint32_t *y, int rows, in
 
 
 int main() {
-    const char *filename = "mnist_tm.bin";
-    struct TsetlinMachine *tm = load_tsetlin_machine(filename);
+    const char *file_path = "data/models/mnist_tm.bin";
+    struct TsetlinMachine *tm = load_tsetlin_machine(file_path);
     if (tm == NULL) {
 		perror("load_tsetlin_machine failed");
 		return 1;

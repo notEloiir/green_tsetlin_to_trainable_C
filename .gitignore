@@ -1,5 +1,5 @@
 .clang-format
 .project
 .settings
-demo
-mnist_*
+.idea
+**/__pycache__/

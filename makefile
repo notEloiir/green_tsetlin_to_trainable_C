@@ -1,16 +1,25 @@
-all: run_demo_py run_demo_c clean
+.PHONY: all run_demo_py run_demo_c clean
 
-demo: demo.c
-	gcc -Wall -Wextra -O2 demo.c TsetlinMachine.c -o demo
+C_SRC = src/c/src/TsetlinMachine.c
+BUILD_DIR = build
+INCLUDE = -I src/c/include
 
-run_demo_c: demo
-	./demo
 
-run_demo_c_clean: run_demo_c clean
+# === Default target ===
+all: run_demo_py run_demo_c
 
-run_demo_py: demo.py
-	poetry run python demo.py
+# === File targets ===
+mnist_demo: $(C_SRC) demos/mnist/c/demo.c
+	mkdir -p $(BUILD_DIR)
+	gcc $(INCLUDE) -Wall -Wextra -O2 $^ -o $(BUILD_DIR)/$@
 
+# === Run targets ===
+run_demo_c: mnist_demo
+	./$(BUILD_DIR)/mnist_demo
+
+run_demo_py:
+	poetry run python demos/mnist/python/demo.py
+
+# === Cleanup ===
 clean:
-	rm ./demo
-
+	rm -f $(BUILD_DIR)/* src/python/__pycache__
