@@ -1,6 +1,6 @@
 .PHONY: all run_demo_py run_demo_c clean
 
-C_SRC = src/c/src/TsetlinMachine.c
+C_SRC = src/c/src/tsetlin_machine.c
 BUILD_DIR = build
 INCLUDE = -I src/c/include
 

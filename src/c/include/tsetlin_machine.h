@@ -5,7 +5,7 @@
 
 #include <stdint.h>
 
-enum output_type {
+enum OutputType {
     CLASS_IDX, BINARY_VECTOR
 };
 
@@ -16,7 +16,7 @@ struct TsetlinMachine {
     int num_clauses;
     int max_state, min_state;
     int boost_true_positive_feedback;
-    enum output_type y_type;
+    enum OutputType y_type;
 
     int predict;
     int update;
@@ -35,7 +35,7 @@ struct TsetlinMachine {
 struct TsetlinMachine *create_tsetlin_machine(
     int num_classes, int threshold, int num_literals, int num_clauses,
     int max_state, int min_state, int boost_true_positive_feedback,
-    enum output_type y_type, int predict, int update
+    enum OutputType y_type, int predict, int update
 );
 
 struct TsetlinMachine *load_tsetlin_machine(const char *filename);

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "TsetlinMachine.h"
+#include "tsetlin_machine.h"
 
 void tm_initialize(struct TsetlinMachine *tm);
 
@@ -20,7 +20,7 @@ void tm_initialize(struct TsetlinMachine *tm);
 struct TsetlinMachine *create_tsetlin_machine(
 	int num_classes, int threshold, int num_literals, int num_clauses,
 	int max_state, int min_state, int boost_true_positive_feedback,
-	enum output_type y_type, int predict, int update
+	enum OutputType y_type, int predict, int update
 ) {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
@@ -98,6 +98,7 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     fread(&max_state, sizeof(int), 1, file);
     fread(&min_state, sizeof(int), 1, file);
     fread(&boost_true_positive_feedback, sizeof(int), 1, file); 
+	// TODO: y_type should be in the file?
     
     struct TsetlinMachine *tm = create_tsetlin_machine(
         num_classes, threshold, num_literals, num_clauses,
