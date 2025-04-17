@@ -31,13 +31,13 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
 
     with open(filename, "wb") as f:
         # Write metadata
-        f.write(threshold.to_bytes(4, "little", signed=True))
-        f.write(n_literals.to_bytes(4, "little", signed=True))
-        f.write(n_clauses.to_bytes(4, "little", signed=True))
-        f.write(n_classes.to_bytes(4, "little", signed=True))
-        f.write(max_state.to_bytes(4, "little", signed=True))
-        f.write(min_state.to_bytes(4, "little", signed=True))
-        f.write(boost_true_positive_feedback.to_bytes(4, "little", signed=True))
+        f.write(threshold.to_bytes(4, "little", signed=False))
+        f.write(n_literals.to_bytes(4, "little", signed=False))
+        f.write(n_clauses.to_bytes(4, "little", signed=False))
+        f.write(n_classes.to_bytes(4, "little", signed=False))
+        f.write(max_state.to_bytes(1, "little", signed=True))
+        f.write(min_state.to_bytes(1, "little", signed=True))
+        f.write(boost_true_positive_feedback.to_bytes(1, "little", signed=False))
 
         # Write weights and clauses
         f.write(weights_transposed.astype(np.int16).tobytes())

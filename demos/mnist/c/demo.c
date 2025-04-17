@@ -5,7 +5,7 @@
 
 
 // Loading data borrowed from https://github.com/ooki/green_tsetlin/blob/master/generator_tests/mnist_test.c
-void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
+void load_mnist_data(uint8_t *x_data, int32_t *y_data) {
 	int rows = 70000;
 	int cols = 784;
 	
@@ -33,7 +33,7 @@ void load_mnist_data(uint8_t *x_data, uint32_t *y_data) {
         exit(1);
     }
 
-    size_t y_read = fread(y_data, sizeof(uint32_t), rows, y_file);
+    size_t y_read = fread(y_data, sizeof(int32_t), rows, y_file);
     if (y_read != (size_t) rows) {
         printf("Failed to read all data from y file\n");
         fclose(y_file);
@@ -71,10 +71,10 @@ int main() {
     printf("Boost: %d\n", tm->boost_true_positive_feedback);
     
     // Load in test data
-	int rows = 70000;
-	int cols = 784;
+	uint32_t rows = 70000;
+	uint32_t cols = 784;
     uint8_t *x_data = malloc(rows * cols * sizeof(uint8_t));
-    uint32_t *y_data = malloc(rows * sizeof(uint32_t));
+    int32_t *y_data = malloc(rows * sizeof(int32_t));
     if (x_data == NULL || y_data == NULL) {
         printf("Failed to allocate memory for x_data or y_data\n");
         return 1;

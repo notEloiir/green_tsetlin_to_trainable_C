@@ -1,4 +1,3 @@
 - implement feedback (based on previous implementation)
-- change int to int32_t or uint32_t or something
 - y_type in model file
 - unit tests for C TsetlinMachine
