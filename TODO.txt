@@ -1,3 +1,4 @@
-- implement feedback (based on previous implementation)
-- y_type in model file
-- unit tests for C TsetlinMachine
+- implement C tsetlin_machine feedback (based on previous implementation)
+- unit tests for C tsetlin_machine
+- in-code (tsetlin_machine.h) docs
+- readme.md docs

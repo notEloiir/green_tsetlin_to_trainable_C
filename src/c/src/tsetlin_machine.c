@@ -10,17 +10,55 @@
 
 #include "tsetlin_machine.h"
 
-void tm_initialize(struct TsetlinMachine *tm);
+
+uint8_t y_eq_class_idx(const struct TsetlinMachine *tm, const void *y, const int32_t *y_pred, uint32_t y_size) {
+    if (y_size != 1) {
+		perror("y_eq_class_idx expects y_size == 1");
+		exit(1);
+	}
+    const uint32_t *y_int = (const uint32_t *)y;
+
+    // class index compare
+    uint32_t best_class = 0;
+    int32_t max_class_score = y_pred[0];
+    for (uint32_t class_id = 1; class_id < tm->num_classes; class_id++) {
+        if (max_class_score < y_pred[class_id]) {
+            max_class_score = y_pred[class_id];
+            best_class = class_id;
+        }
+    }
+    
+    return (best_class == y_int[0]);
+}
+
+uint8_t y_eq_bin_vector(const struct TsetlinMachine *tm, const void *y, const int32_t *y_pred, uint32_t y_size) {
+	if(y_size != tm->num_classes) {
+		perror("y_eq_bin_vector expects y_size == tm->num_classes");
+		exit(1);
+	}
+    const uint32_t *y_int = (const uint32_t *)y;
+
+	for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
+		// binary threshold (k=mid_state) and compare
+		if ((y_int[class_id] >= tm->mid_state) != y_pred[class_id]) {
+			return 0;
+		}
+	}
+	return 1;
+}
 
 /**************************************/
 /*** The Multiclass Tsetlin Machine ***/
 /**************************************/
 
+void tm_initialize(struct TsetlinMachine *tm);
+
 /*** Initialize Tsetlin Machine ***/
 struct TsetlinMachine *create_tsetlin_machine(
     uint32_t num_classes, uint32_t threshold, uint32_t num_literals, uint32_t num_clauses,
     int8_t max_state, int8_t min_state, uint8_t boost_true_positive_feedback,
-    enum OutputType y_type, uint8_t predict, uint8_t update
+    uint8_t (*y_eq)(const struct TsetlinMachine *tm, const void *y, const int32_t *y_pred, uint32_t y_size),
+	uint8_t predict, uint8_t update
 ) {
 	struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
 	if(tm == NULL) {
@@ -35,7 +73,8 @@ struct TsetlinMachine *create_tsetlin_machine(
 	tm->max_state = max_state;
 	tm->min_state = min_state;
 	tm->boost_true_positive_feedback = boost_true_positive_feedback;
-	tm->y_type = y_type;
+	
+	tm->y_eq = y_eq;
 	
 	tm->predict = predict;
 	tm->update = update;
@@ -76,9 +115,10 @@ struct TsetlinMachine *create_tsetlin_machine(
 }
 
 
-struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
-    // I'm assuming correct format, max_state <= 127 && min_state >= -127 && -127 <= max(state) <= 127
-    
+struct TsetlinMachine *load_tsetlin_machine(
+	const char *filename,
+	uint8_t (*y_eq)(const struct TsetlinMachine *tm, const void *y, const int32_t *y_pred, uint32_t y_size)
+) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
         perror("Error opening file");
@@ -97,12 +137,11 @@ struct TsetlinMachine *load_tsetlin_machine(const char *filename) {
     fread(&max_state, sizeof(int8_t), 1, file);
     fread(&min_state, sizeof(int8_t), 1, file);
     fread(&boost_true_positive_feedback, sizeof(uint8_t), 1, file); 
-	// TODO: y_type should be in the file?
     
     struct TsetlinMachine *tm = create_tsetlin_machine(
         num_classes, threshold, num_literals, num_clauses,
 		max_state, min_state, boost_true_positive_feedback,
-		CLASS_IDX, 1, 0
+		y_eq, 1, 0
 	);
     if (!tm) {
         perror("create_tsetlin_machine failed");
@@ -326,7 +365,7 @@ void tm_score(struct TsetlinMachine *tm, uint8_t *X, int32_t *y_pred) {
 	sum_up_class_votes(tm, y_pred);
 }
 
-void eval_model(struct TsetlinMachine *tm, uint8_t *X, int32_t *y, uint32_t rows, uint32_t cols) {
+void eval_model(struct TsetlinMachine *tm, uint8_t *X, int32_t *y, uint32_t rows, uint32_t X_cols, uint32_t y_cols) {
 	uint32_t correct = 0;
     uint32_t total = 0;
     int32_t *y_pred = malloc(tm->num_classes * sizeof(int32_t));
@@ -341,36 +380,12 @@ void eval_model(struct TsetlinMachine *tm, uint8_t *X, int32_t *y, uint32_t rows
 			printf("%d out of %d done\n", row, rows);
 		}
 		
-		uint8_t* datapoint = &X[row * cols];
+		uint8_t* datapoint = &X[row * X_cols];
 		
 		tm_score(tm, datapoint, y_pred);
-		
-		if (tm->y_type == CLASS_IDX) {
-			uint32_t best_class = 0;
-			int32_t max_class_score = y_pred[0];
-			for (uint32_t class_id = 1; class_id < (uint32_t)tm->num_classes; class_id++) {
-				if (max_class_score < y_pred[class_id]) {
-					max_class_score = y_pred[class_id];
-					best_class = class_id;
-				}
-			}
-			
-			if(best_class == (uint32_t)y[row]) {
-				correct++;
-			}
-		}
-		else if (tm->y_type == BINARY_VECTOR) {
+
+		if ((const void *)(tm->y_eq)(tm, (y + (row * y_cols)), y_pred, y_cols)) {
 			correct++;
-			for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
-				if (y[(row * tm->num_classes) + class_id] != y_pred[class_id]) {
-					correct--;
-					break;
-				}
-			}
-		}
-		else {
-			printf("y_type not implemented in eval_model\n");
-        	exit(1);
 		}
         
         total++;
