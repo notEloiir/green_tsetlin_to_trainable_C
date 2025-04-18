@@ -15,7 +15,6 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
 
     weights: np.ndarray = tm._state.w  # shape=(n_clauses, n_classes), dtype=np.int16
     clauses: np.ndarray = tm._state.c  # shape=(n_clauses, n_literals*2), dtype=np.int8
-    weights_transposed = weights.transpose()  # shape=(n_classes, n_clauses), dtype=np.int16
     clauses_reordered = clauses.reshape(n_clauses, 2, n_literals).transpose(0, 2, 1).reshape(n_clauses, -1)
 
     print("threshold", threshold,
@@ -25,7 +24,7 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
           "max_state", max_state,
           "min_state", min_state,
           "boost_true_positive_feedback", boost_true_positive_feedback,
-          "weights (transposed)", weights_transposed.shape, weights_transposed,
+          "weights", weights.shape, weights,
           "clauses (reordered)", clauses_reordered.shape, clauses_reordered,
           sep='\n')
 
@@ -40,5 +39,5 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
         f.write(boost_true_positive_feedback.to_bytes(1, "little", signed=False))
 
         # Write weights and clauses
-        f.write(weights_transposed.astype(np.int16).tobytes())
+        f.write(weights.astype(np.int16).tobytes())
         f.write(clauses_reordered.astype(np.int8).tobytes())

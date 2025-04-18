@@ -55,9 +55,9 @@ void load_mnist_data(uint8_t *x_data, int32_t *y_data) {
 
 int main() {
     const char *file_path = "data/models/mnist_tm.bin";
-    struct TsetlinMachine *tm = load_tsetlin_machine(file_path, y_eq_class_idx);
+    struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t), 1.0);
     if (tm == NULL) {
-		perror("load_tsetlin_machine failed");
+		perror("tm_load failed");
 		return 1;
 	}
 	
@@ -85,10 +85,10 @@ int main() {
     // Evaluate the loaded Tsetlin Machine
     printf("Evaluating model\n");
     rows = 5000;  // Evaluate on first 5000 rows
-    eval_model(tm, x_data, y_data, rows, cols, 1);
+    tm_eval(tm, x_data, y_data, rows, cols);
 
 	// Clean up
-    free_tsetlin_machine(tm);
+    tm_free(tm);
     free(x_data);
     free(y_data);
     

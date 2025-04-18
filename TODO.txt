@@ -1,4 +1,5 @@
-- implement C tsetlin_machine feedback (based on previous implementation)
+- implement feedback functions
+- s and y_size  to file
 - unit tests for C tsetlin_machine
 - in-code (tsetlin_machine.h) docs
 - readme.md docs
