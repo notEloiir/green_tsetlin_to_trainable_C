@@ -17,7 +17,8 @@ struct TsetlinMachine {
     void (*output_activation)(const struct TsetlinMachine *tm, const int32_t *votes, void *y_pred);
     void (*output_activation_pseudograd)(const struct TsetlinMachine *tm, const void *y, const int32_t *votes, int8_t *grad);
 
-	int mid_state;
+	int8_t mid_state;
+    float s_inv, s_min1_inv;
 	int8_t *ta_state;  // shape: flat (num_clauses, num_literals, 2)
 	int16_t *weights;  // shape: flat (num_clauses, num_classes)
 	int32_t *clause_output;  // shape: (num_clauses)
