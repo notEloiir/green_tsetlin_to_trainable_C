@@ -91,8 +91,7 @@ struct TsetlinMachine *tm_create(
 
 // Load Tsetlin Machine from a bin file
 struct TsetlinMachine *tm_load(
-    const char *filename,
-    uint32_t y_size, uint32_t y_element_size, float s
+    const char *filename, uint32_t y_size, uint32_t y_element_size
 ) {
     FILE *file = fopen(filename, "rb");
     if (!file) {
@@ -103,9 +102,10 @@ struct TsetlinMachine *tm_load(
     uint32_t threshold, num_literals, num_clauses, num_classes;
     int8_t max_state, min_state;
     uint8_t boost_true_positive_feedback;
+    double s_double;
 
     size_t threshold_read, num_literals_read, num_clauses_read, num_classes_read;
-    size_t max_state_read, min_state_read, boost_true_positive_feedback_read;
+    size_t max_state_read, min_state_read, boost_true_positive_feedback_read, s_double_read;
 
     // Read metadata
     threshold_read = fread(&threshold, sizeof(uint32_t), 1, file);
@@ -115,9 +115,11 @@ struct TsetlinMachine *tm_load(
     max_state_read = fread(&max_state, sizeof(int8_t), 1, file);
     min_state_read = fread(&min_state, sizeof(int8_t), 1, file);
     boost_true_positive_feedback_read = fread(&boost_true_positive_feedback, sizeof(uint8_t), 1, file);
+    s_double_read = fread(&s_double, sizeof(double), 1, file);
 
     if (threshold_read != 1 || num_literals_read != 1 || num_clauses_read != 1 || num_classes_read != 1 ||
-            max_state_read != 1 || min_state_read != 1 || boost_true_positive_feedback_read != 1) {
+            max_state_read != 1 || min_state_read != 1 ||
+            boost_true_positive_feedback_read != 1 || s_double_read != 1) {
         fprintf(stderr, "Failed to read all metadata from bin\n");
         fclose(file);
         return NULL;
@@ -126,7 +128,7 @@ struct TsetlinMachine *tm_load(
     struct TsetlinMachine *tm = tm_create(
         num_classes, threshold, num_literals, num_clauses,
         max_state, min_state, boost_true_positive_feedback,
-        y_size, y_element_size, s
+        y_size, y_element_size, (float)s_double
     );
     if (!tm) {
         fprintf(stderr, "tm_create failed\n");
@@ -207,9 +209,10 @@ void tm_initialize(struct TsetlinMachine *tm) {
         }
     }
     
+    // Init weights randomly to -1 or 1
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
-            tm->weights[(clause_id * tm->num_classes) + class_id] = 1;  // TODO: ?
+            tm->weights[(clause_id * tm->num_classes) + class_id] = 1 - 2*(1.0 * rand()/RAND_MAX <= 0.5);
         }
     }
 }

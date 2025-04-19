@@ -1,4 +1,2 @@
-- what green_tsetlin initializes weights, s to
-- s and y_size  to file
 - unit tests for C tsetlin_machine
 - proper docs

@@ -42,8 +42,7 @@ struct TsetlinMachine *tm_create(
 
 // Load Tsetlin Machine from a bin file
 struct TsetlinMachine *tm_load(
-    const char *filename,
-    uint32_t y_size, uint32_t y_element_size, float s
+    const char *filename, uint32_t y_size, uint32_t y_element_size
 );
 
 // Deallocate all memory

@@ -55,7 +55,7 @@ void load_mnist_data(uint8_t *x_data, int32_t *y_data) {
 
 int main() {
     const char *file_path = "data/models/mnist_tm.bin";
-    struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t), 1.0);
+    struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
     if (tm == NULL) {
 		perror("tm_load failed");
 		return 1;
@@ -69,6 +69,7 @@ int main() {
     printf("Max state: %d\n", tm->max_state);
     printf("Min state: %d\n", tm->min_state);
     printf("Boost: %d\n", tm->boost_true_positive_feedback);
+    printf("s: %f\n", tm->s);
     
     // Load in test data
 	uint32_t rows = 70000;
