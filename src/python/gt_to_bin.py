@@ -13,7 +13,7 @@ def save_to_bin(tm: gt.TsetlinMachine, filename: str):
     max_state: int = 127    # hardcoded in green_tsetlin/src/func_tm.hpp
     min_state: int = -127   # hardcoded in green_tsetlin/src/func_tm.hpp
     boost_true_positive_feedback: int = int(tm.boost_true_positives)
-    s: float = -42.         # hardcoded in green_tsetlin/src/aligned_tsetlin_state.hpp
+    s: float = tm.s[0]
 
     weights: np.ndarray = tm._state.w  # shape=(n_clauses, n_classes), dtype=np.int16
     clauses: np.ndarray = tm._state.c  # shape=(n_clauses, n_literals*2), dtype=np.int8

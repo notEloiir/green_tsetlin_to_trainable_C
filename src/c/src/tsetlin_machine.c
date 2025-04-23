@@ -225,19 +225,15 @@ static inline uint8_t action(int8_t state, int8_t mid_state) {
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
 // Output is stored an internal output array clause_output
 static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X) {
-    uint8_t action_include, action_include_negated;
-    uint8_t empty_clause;
-
+    // For each clause, check if it is "active" - all necessary literals have the right value
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         tm->clause_output[clause_id] = 1;
-        empty_clause = 1;
-        for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-            action_include = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0], tm->mid_state);
-            action_include_negated = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state);
-            
-            empty_clause = (empty_clause && (action_include || action_include_negated));
 
-            if ((action_include == 1 && X[literal_id] == 0) || (action_include_negated == 1 && X[literal_id] == 1) || empty_clause) {
+        for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
+            uint8_t action_include = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0], tm->mid_state);
+            uint8_t action_include_negated = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state);
+
+            if ((action_include == 1 && X[literal_id] == 0) || (action_include_negated == 1 && X[literal_id] == 1)) {
                 tm->clause_output[clause_id] = 0;
                 break;
             }
