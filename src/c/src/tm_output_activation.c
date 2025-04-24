@@ -46,30 +46,52 @@ void oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred) {
 
 // --- Basic output_activation_pseudograd functions ---
 
-void oa_class_idx_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad) {
+void feedback_class_idx(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id) {
     const uint32_t *label = (const uint32_t *)y;
 
-    // Pseudo grad of correct label = 1, all else = -1
+    // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
-        
         float update_probability = ((float)votes_clipped + (float)tm->threshold) / (float)(2 * tm->threshold);
-
-        grad[class_id] = (1.0 * rand()/RAND_MAX >= update_probability) ? -1 : 0;
+        int8_t *clause_feedback = tm->feedback + ((clause_id * tm->num_classes + class_id) * 3);
+        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+        
+        if (class_id == *label) {
+            // Correct vote
+            if (tm->clause_output[clause_id] == 1) {
+                clause_feedback[0] += feedback_strength;
+            }
+            else {
+                clause_feedback[1] += feedback_strength;
+            }
+        }
+        else if (tm->clause_output[clause_id] == 1) {
+            clause_feedback[2] += feedback_strength;
+        }
     }
-    grad[*label] = -grad[*label];
 }
 
-void oa_bin_vector_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad) {
+void feedback_bin_vector(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id) {
     uint8_t *y_bin_vec = (uint8_t *)y;
 
-    // Pseudo grad of correct labels = 1, incorrect labels = -1
+    // Correct votes gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
-
         float update_probability = ((float)votes_clipped + (float)tm->threshold) / (float)(2 * tm->threshold);
+        int8_t *clause_feedback = tm->feedback + ((clause_id * tm->num_classes + class_id) * 3);
+        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
 
-        grad[class_id] = (1.0 * rand()/RAND_MAX >= update_probability) ? 1 : 0;
-        grad[class_id] *= -1 * !((tm->votes[class_id] > tm->mid_state) == y_bin_vec[class_id]);
+        if ((tm->votes[class_id] > tm->mid_state) == y_bin_vec[class_id]) {
+            // Correct vote
+            if (tm->clause_output[clause_id] == 1) {
+                clause_feedback[0] += feedback_strength;
+            }
+            else {
+                clause_feedback[1] += feedback_strength;
+            }
+        }
+        else if (tm->clause_output[clause_id] == 1) {
+            clause_feedback[2] += feedback_strength;
+        }
     }
 }

@@ -88,7 +88,7 @@ int main() {
     // Evaluate the loaded Tsetlin Machine
     printf("Evaluating model\n");
     rows = 5000;  // Evaluate on first 5000 rows
-    tm_eval(tm, x_data, y_data, rows);
+    tm_evaluate(tm, x_data, y_data, rows);
 
 	// Clean up
     tm_free(tm);

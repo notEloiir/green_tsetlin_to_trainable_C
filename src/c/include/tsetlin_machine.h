@@ -17,14 +17,14 @@ struct TsetlinMachine {
     uint32_t y_size, y_element_size;
     uint8_t (*y_eq)(const struct TsetlinMachine *tm, const void *y, const void *y_pred);
     void (*output_activation)(const struct TsetlinMachine *tm, void *y_pred);
-    void (*output_activation_pseudograd)(const struct TsetlinMachine *tm, const void *y, int8_t *pseudograd);
+    void (*calculate_feedback)(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id);
 
 	int8_t mid_state;
     float s_inv, s_min1_inv;
 	int8_t *ta_state;  // shape: flat (num_clauses, num_literals, 2)
 	int16_t *weights;  // shape: flat (num_clauses, num_classes)
 	uint8_t *clause_output;  // shape: (num_clauses)
-    int8_t *pseudograd;  // shape: flat (num_clauses, num_classes)
+    int8_t *feedback;  // shape: flat (num_clauses, num_classes, 3) - clause-class feedback type strengths: 1a, 1b, 2
     int32_t *votes;  // shape: (num_classes)
 };
 
@@ -48,15 +48,15 @@ struct TsetlinMachine *tm_load(
 // Deallocate all memory
 void tm_free(struct TsetlinMachine *tm);
 
-// Train on a single data point
-void tm_update(struct TsetlinMachine *tm, uint8_t *X, void *y);
+// Train
+void tm_train(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs);
 
 // Inference
-// Writes to the result array y_pred of size (rows * tm->y_size) and element size tm->y_element_size
-void tm_score(struct TsetlinMachine *tm, uint8_t *X, void *y_pred, uint32_t rows);
+// Writes to the result array y_pred of size (rows * tm->y_size) and element size tm->y_element_size (same as y)
+void tm_predict(struct TsetlinMachine *tm, uint8_t *X, void *y_pred, uint32_t rows);
 
-// Evaluation
-void tm_eval(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows);
+// Simple accuracy evaluation
+void tm_evaluate(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows);
 
 
 // --- y_eq ---
@@ -79,16 +79,14 @@ void tm_set_output_activation(
 );
 
 
-// --- output_activation_pseudograd ---
-// The pseudo gradient to output_activation function
-// This function, based on votes, decides the vector to minimize cost function
-// (Since output_activation doesn't have to be differentiable, can be a heuristic, this is a pseudo gradient)
+// --- calculate_feedback ---
+// Calculate clause-class feedback
 
 // Defined in tm_output_activation.h
 
-void tm_set_output_activation_pseudograd(
+void tm_set_calculate_feedback(
     struct TsetlinMachine *tm,
-    void (*output_activation_pseudograd)(const struct TsetlinMachine *tm, const void *y, int8_t *pseudograd)
+    void (*calculate_feedback)(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id)
 );
 
 
