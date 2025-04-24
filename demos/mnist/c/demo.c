@@ -54,6 +54,8 @@ void load_mnist_data(uint8_t *x_data, int32_t *y_data) {
 
 
 int main() {
+    srand(42);
+
     const char *file_path = "data/models/mnist_tm.bin";
     struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
     if (tm == NULL) {

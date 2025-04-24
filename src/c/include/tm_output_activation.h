@@ -16,4 +16,4 @@ void oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred);  // y_size = 
 // (Since output_activation doesn't have to be differentiable, can be a heuristic, this is a pseudo gradient)
 
 void oa_class_idx_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad);  // y_size = 1
-void oa_binary_vector_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad);  // y_size = tm->num_classes
+void oa_bin_vector_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad);  // y_size = tm->num_classes

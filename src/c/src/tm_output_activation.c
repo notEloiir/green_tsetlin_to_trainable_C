@@ -39,7 +39,7 @@ void oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred) {
 
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         // binary threshold (k=mid_state)
-        y_bin_vec[class_id] = (tm->votes[class_id] >= tm->mid_state);
+        y_bin_vec[class_id] = (tm->votes[class_id] > tm->mid_state);
     }
 }
 
@@ -49,6 +49,7 @@ void oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred) {
 void oa_class_idx_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad) {
     const uint32_t *label = (const uint32_t *)y;
 
+    // Pseudo grad of correct label = 1, all else = -1
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
         
@@ -57,4 +58,18 @@ void oa_class_idx_pseudograd(const struct TsetlinMachine *tm, const void *y, int
         grad[class_id] = (1.0 * rand()/RAND_MAX >= update_probability) ? -1 : 0;
     }
     grad[*label] = -grad[*label];
+}
+
+void oa_bin_vector_pseudograd(const struct TsetlinMachine *tm, const void *y, int8_t *grad) {
+    uint8_t *y_bin_vec = (uint8_t *)y;
+
+    // Pseudo grad of correct labels = 1, incorrect labels = -1
+    for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
+        int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
+
+        float update_probability = ((float)votes_clipped + (float)tm->threshold) / (float)(2 * tm->threshold);
+
+        grad[class_id] = (1.0 * rand()/RAND_MAX >= update_probability) ? 1 : 0;
+        grad[class_id] *= -1 * !((tm->votes[class_id] > tm->mid_state) == y_bin_vec[class_id]);
+    }
 }

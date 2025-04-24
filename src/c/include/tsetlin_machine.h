@@ -53,7 +53,6 @@ void tm_update(struct TsetlinMachine *tm, uint8_t *X, void *y);
 
 // Inference
 // Writes to the result array y_pred of size (rows * tm->y_size) and element size tm->y_element_size
-// Results in range [-threshold, threshold].
 void tm_score(struct TsetlinMachine *tm, uint8_t *X, void *y_pred, uint32_t rows);
 
 // Evaluation
@@ -74,7 +73,7 @@ uint8_t y_eq_generic(const struct TsetlinMachine *tm, const void *y, const void 
 
 // Defined in tm_output_activation.h
 
-void set_output_activation(
+void tm_set_output_activation(
     struct TsetlinMachine *tm,
     void (*output_activation)(const struct TsetlinMachine *tm, void *y_pred)
 );
@@ -87,7 +86,7 @@ void set_output_activation(
 
 // Defined in tm_output_activation.h
 
-void set_output_activation_pseudograd(
+void tm_set_output_activation_pseudograd(
     struct TsetlinMachine *tm,
     void (*output_activation_pseudograd)(const struct TsetlinMachine *tm, const void *y, int8_t *pseudograd)
 );

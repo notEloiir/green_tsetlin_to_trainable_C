@@ -417,14 +417,14 @@ void tm_eval(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows) {
 }
 
 
-void set_output_activation(
+void tm_set_output_activation(
     struct TsetlinMachine *tm,
     void (*output_activation)(const struct TsetlinMachine *tm, void *y_pred)
 ) {
     tm->output_activation = output_activation;
 }
 
-void set_output_activation_pseudograd(
+void tm_set_output_activation_pseudograd(
     struct TsetlinMachine *tm,
     void (*output_activation_pseudograd)(const struct TsetlinMachine *tm, const void *y, int8_t *pseudograd)
 ) {
