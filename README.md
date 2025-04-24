@@ -13,4 +13,7 @@ To a custom interpreter, originally based on: https://github.com/cair/TsetlinMac
 - `poetry install --no-root`  
 
 # Run demo
-- `make && make clean`  
+- `poetry run make && make clean`  
+
+# Run tests
+- `make run_tests && make clean`  

@@ -281,6 +281,9 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, uint8_t *X) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
             uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 0];
 
+            tm->weights[clause_id * tm->num_classes + class_id] +=
+                tm->weights[clause_id * tm->num_classes + class_id] >= 0 ? feedback_strength : -feedback_strength;
+            
             for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
                 if (X[literal_id] == 1) {
                     // True positive
@@ -340,6 +343,9 @@ static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X) {
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
             uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 2];
+
+            tm->weights[clause_id * tm->num_classes + class_id] +=
+                tm->weights[clause_id * tm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
             for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
                 tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += feedback_strength * (
