@@ -366,6 +366,8 @@ static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X) {
 void tm_train(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs) {
     for (uint32_t epoch = 0; epoch < epochs; epoch++) {
         for (uint32_t batch = 0; batch < rows / batch_size; batch++) {
+            memset(tm->feedback, 0, tm->num_clauses * tm->num_clauses * 3);
+
             uint32_t start_idx, stop_idx;
             start_idx = batch * batch_size;
             stop_idx = (((batch + 1) * batch_size) > rows) ? rows : (batch + 1) * batch_size;
@@ -376,8 +378,9 @@ void tm_train(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows, uin
 
                 calculate_clause_output(tm, X_row);
 
+                // Iterate over all clauses, not only active ones (1b)
+                // Calculate pseudo gradient - feedback to clause-class vote weight
                 for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-                    // Calculate pseudo gradient - feedback to clauses
                     int16_t *clause_votes = tm->weights + (clause_id * tm->num_classes);
             
                     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
