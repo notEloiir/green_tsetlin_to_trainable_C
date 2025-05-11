@@ -4,3 +4,6 @@
 .idea
 .vscode
 **/__pycache__/
+.autotools
+.clangd
+.cproject
