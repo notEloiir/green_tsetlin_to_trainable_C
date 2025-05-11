@@ -45,6 +45,9 @@ struct TsetlinMachine *tm_load(
     const char *filename, uint32_t y_size, uint32_t y_element_size
 );
 
+// Save Tsetlin Machine to a bin file
+void tm_save(struct TsetlinMachine *tm, const char *filename);
+
 // Deallocate all memory
 void tm_free(struct TsetlinMachine *tm);
 
@@ -64,14 +67,16 @@ void tm_evaluate(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows);
 
 // Basic y_eq function comparing raw memory using memcmp
 // Works with any trivial types
-uint8_t y_eq_generic(const struct TsetlinMachine *tm, const void *y, const void *y_pred);
+uint8_t tm_y_eq_generic(const struct TsetlinMachine *tm, const void *y, const void *y_pred);
 
 
 // --- output_activation ---
 // The raw output of a Tsetlin Machine are just summed up votes (tm->votes), of shape (num_classes)
 // This function translates votes into a desirable format of any type (void *)
 
-// Defined in tm_output_activation.h
+
+void tm_oa_class_idx(const struct TsetlinMachine *tm, void *y_pred);  // y_size = 1
+void tm_oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred);  // y_size = tm->num_classes
 
 void tm_set_output_activation(
     struct TsetlinMachine *tm,
@@ -82,17 +87,11 @@ void tm_set_output_activation(
 // --- calculate_feedback ---
 // Calculate clause-class feedback
 
-// Defined in tm_output_activation.h
+void tm_feedback_class_idx(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id);  // y_size = 1
+void tm_feedback_bin_vector(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id);  // y_size = tm->num_classes
 
 void tm_set_calculate_feedback(
     struct TsetlinMachine *tm,
     void (*calculate_feedback)(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id)
 );
-
-
-// --- Getters ---
-
-int8_t tm_get_state(struct TsetlinMachine *tm, uint32_t clause_id, uint32_t literal_id, uint8_t automaton_type);
-
-int16_t tm_get_weight(struct TsetlinMachine *tm, uint32_t class_id, uint32_t clause_id);
 

@@ -2,15 +2,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "tsetlin_machine.h"
-#include "tm_output_activation.h"
 #include "utility.h"
 
 
 // --- Basic y_eq function ---
 
-uint8_t y_eq_generic(const struct TsetlinMachine *tm, const void *y, const void *y_pred) {
+uint8_t tm_y_eq_generic(const struct TsetlinMachine *tm, const void *y, const void *y_pred) {
     return 0 == memcmp(y, y_pred, tm->y_size * tm->y_element_size);
 }
 
@@ -42,9 +42,9 @@ struct TsetlinMachine *tm_create(
     
     tm->y_size = y_size;
     tm->y_element_size = y_element_size;
-    tm->y_eq = y_eq_generic;
-    tm->output_activation = oa_class_idx;
-    tm->calculate_feedback = feedback_class_idx;
+    tm->y_eq = tm_y_eq_generic;
+    tm->output_activation = tm_oa_class_idx;
+    tm->calculate_feedback = tm_feedback_class_idx;
     
     tm->ta_state = (int8_t *)malloc(num_clauses * num_literals * 2 * sizeof(int8_t));  // shape: flat (num_clauses, num_literals, 2)
     if (tm->ta_state == NULL) {
@@ -156,6 +156,93 @@ struct TsetlinMachine *tm_load(
 
     fclose(file);
     return tm;
+}
+
+
+void tm_save(struct TsetlinMachine *tm, const char *filename) {
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file for writing");
+        return;
+    }
+
+    size_t written;
+
+    written = fwrite(&tm->threshold, sizeof(uint32_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write threshold\n");
+        goto save_error;
+    }
+    written = fwrite(&tm->num_literals, sizeof(uint32_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write num_literals\n");
+        goto save_error;
+    }
+    written = fwrite(&tm->num_clauses, sizeof(uint32_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write num_clauses\n");
+        goto save_error;
+    }
+
+    // 4. num_classes
+    written = fwrite(&tm->num_classes, sizeof(uint32_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write num_classes\n");
+        goto save_error;
+    }
+
+    // 5. max_state
+    written = fwrite(&tm->max_state, sizeof(int8_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write max_state\n");
+        goto save_error;
+    }
+
+    // 6. min_state
+    written = fwrite(&tm->min_state, sizeof(int8_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write min_state\n");
+        goto save_error;
+    }
+
+    // 7. boost_true_positive_feedback
+    written = fwrite(&tm->boost_true_positive_feedback, sizeof(uint8_t), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write boost_true_positive_feedback\n");
+        goto save_error;
+    }
+
+    // 8. s (double)
+    written = fwrite(&tm->s, sizeof(double), 1, file);
+    if (written != 1) {
+        fprintf(stderr, "Failed to write s parameter\n");
+        goto save_error;
+    }
+
+    // 9. weights array
+    size_t n_weights = (size_t)tm->num_clauses * tm->num_classes;
+    written = fwrite(tm->weights, sizeof(int16_t), n_weights, file);
+    if (written != n_weights) {
+        fprintf(stderr, "Failed to write weights array (%zu of %zu)\n",
+                written, n_weights);
+        goto save_error;
+    }
+
+    // 10. ta_state array (two literals per clause)
+    size_t n_states = (size_t)tm->num_clauses * tm->num_literals * 2;
+    written = fwrite(tm->ta_state, sizeof(int8_t), n_states, file);
+    if (written != n_states) {
+        fprintf(stderr, "Failed to write ta_state array (%zu of %zu)\n",
+                written, n_states);
+        goto save_error;
+    }
+
+    fclose(file);
+    return;
+
+save_error:
+    fclose(file);
+    fprintf(stderr, "tm_save aborted, file %s may be incomplete\n", filename);
 }
 
 
@@ -280,30 +367,38 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, uint8_t *X) {
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
             uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 0];
+            uint8_t delta;
 
-            tm->weights[clause_id * tm->num_classes + class_id] +=
-                tm->weights[clause_id * tm->num_classes + class_id] >= 0 ? feedback_strength : -feedback_strength;
+            if (tm->weights[clause_id * tm->num_classes + class_id] >= 0) {
+            	delta = min(feedback_strength, SHRT_MAX - tm->weights[clause_id * tm->num_classes + class_id]);
+            	tm->weights[clause_id * tm->num_classes + class_id] += delta;
+            }
+            else {
+            	delta = min(feedback_strength, -(SHRT_MIN - tm->weights[clause_id * tm->num_classes + class_id]));
+            	tm->weights[clause_id * tm->num_classes + class_id] += delta;
+            }
             
             for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
                 if (X[literal_id] == 1) {
                     // True positive
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += feedback_strength * (
-                        (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] < tm->max_state) && 
+                	delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength);
+                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += delta * (
                         (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= tm->s_min1_inv));
 
                     // False negative
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= feedback_strength * (
-                        (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] > tm->min_state) && 
+                    delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength);
+                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= delta * (
                         (1.0*rand()/RAND_MAX <= tm->s_inv));
 
                 } else {
                     // True negative
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += feedback_strength * (
-                        (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] < tm->max_state) && 
+                	delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength);
+                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += delta * (
                         (1.0*rand()/RAND_MAX <= tm->s_min1_inv));
                     
                     // False positive
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= feedback_strength * (
+                    delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength);
+                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= delta * (
                         (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] > tm->min_state) && 
                         (1.0*rand()/RAND_MAX <= tm->s_inv));
                 }
@@ -320,14 +415,15 @@ static inline void type_1b_feedback(struct TsetlinMachine *tm) {
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
             uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 1];
+            uint8_t delta;
 
             for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= feedback_strength * (
-                    (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] > tm->min_state) && 
+                delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength);
+                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= delta * (
                     (1.0*rand()/RAND_MAX <= tm->s_inv));
-                                    
-                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= feedback_strength * (
-                    (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] > tm->min_state) && 
+
+                delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength);
+                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= delta * (
                     (1.0*rand()/RAND_MAX <= tm->s_inv));
             }
         }
@@ -343,19 +439,20 @@ static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X) {
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
             uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 2];
+            uint8_t delta;
 
             tm->weights[clause_id * tm->num_classes + class_id] +=
                 tm->weights[clause_id * tm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
             for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += feedback_strength * (
+            	delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength);
+                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += delta * (
                     0 == action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], tm->mid_state) &&
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] < tm->max_state &&
                     0 == X[literal_id]);
-        
-                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += feedback_strength * (
+
+            	delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength);
+                tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += delta * (
                     0 == action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state) &&
-                    tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] < tm->max_state &&
                     1 == X[literal_id]);
             }
         }
@@ -444,6 +541,42 @@ void tm_evaluate(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows) 
 }
 
 
+// --- Basic output_activation functions ---
+
+void tm_oa_class_idx(const struct TsetlinMachine *tm, void *y_pred) {
+    if (tm->y_size != 1) {
+        fprintf(stderr, "y_eq_class_idx expects y_size == 1");
+        exit(1);
+    }
+    uint32_t *label_pred = (uint32_t *)y_pred;
+
+    // class index compare
+    uint32_t best_class = 0;
+    int32_t max_class_score = tm->votes[0];
+    for (uint32_t class_id = 1; class_id < tm->num_classes; class_id++) {
+        if (max_class_score < tm->votes[class_id]) {
+            max_class_score = tm->votes[class_id];
+            best_class = class_id;
+        }
+    }
+
+    *label_pred = best_class;
+}
+
+void tm_oa_bin_vector(const struct TsetlinMachine *tm, void *y_pred) {
+    if(tm->y_size != tm->num_classes) {
+        fprintf(stderr, "y_eq_bin_vector expects y_size == tm->num_classes");
+        exit(1);
+    }
+    uint8_t *y_bin_vec = (uint8_t *)y_pred;
+
+    for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
+        // binary threshold (k=mid_state)
+        y_bin_vec[class_id] = (tm->votes[class_id] > tm->mid_state);
+    }
+}
+
+
 void tm_set_output_activation(
     struct TsetlinMachine *tm,
     void (*output_activation)(const struct TsetlinMachine *tm, void *y_pred)
@@ -451,18 +584,63 @@ void tm_set_output_activation(
     tm->output_activation = output_activation;
 }
 
+
+// --- Basic output_activation_pseudograd functions ---
+
+void tm_feedback_class_idx(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id) {
+    const uint32_t *label = (const uint32_t *)y;
+
+    // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
+    for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
+        int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
+        float update_probability = ((float)votes_clipped + (float)tm->threshold) / (float)(2 * tm->threshold);
+        int8_t *clause_feedback = tm->feedback + ((clause_id * tm->num_classes + class_id) * 3);
+        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+
+        if (class_id == *label) {
+            // Correct vote
+            if (tm->clause_output[clause_id] == 1) {
+                clause_feedback[0] += feedback_strength;
+            }
+            else {
+                clause_feedback[1] += feedback_strength;
+            }
+        }
+        else if (tm->clause_output[clause_id] == 1) {
+            clause_feedback[2] += feedback_strength;
+        }
+    }
+}
+
+void tm_feedback_bin_vector(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id) {
+    uint8_t *y_bin_vec = (uint8_t *)y;
+
+    // Correct votes gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
+    for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
+        int32_t votes_clipped = clip(tm->votes[class_id], (int32_t)tm->threshold);
+        float update_probability = ((float)votes_clipped + (float)tm->threshold) / (float)(2 * tm->threshold);
+        int8_t *clause_feedback = tm->feedback + ((clause_id * tm->num_classes + class_id) * 3);
+        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+
+        if ((tm->votes[class_id] > tm->mid_state) == y_bin_vec[class_id]) {
+            // Correct vote
+            if (tm->clause_output[clause_id] == 1) {
+                clause_feedback[0] += feedback_strength;
+            }
+            else {
+                clause_feedback[1] += feedback_strength;
+            }
+        }
+        else if (tm->clause_output[clause_id] == 1) {
+            clause_feedback[2] += feedback_strength;
+        }
+    }
+}
+
+
 void tm_set_calculate_feedback(
     struct TsetlinMachine *tm,
     void (*calculate_feedback)(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id)
 ) {
     tm->calculate_feedback = calculate_feedback;
-}
-
-
-int8_t tm_get_state(struct TsetlinMachine *tm, uint32_t clause_id, uint32_t literal_id, uint8_t automaton_type) {
-    return tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + automaton_type];
-}
-
-int16_t tm_get_weight(struct TsetlinMachine *tm, uint32_t class_id, uint32_t clause_id) {
-    return tm->weights[(clause_id * tm->num_classes) + class_id];
 }
