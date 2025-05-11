@@ -21,6 +21,10 @@ void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, ui
 	if (*head_ptr == NULL) {
 		*head_ptr = node;
 	}
+	else if (prev == NULL) {
+		node->next = *head_ptr;
+		*head_ptr = node;
+	}
 	else {
 		prev->next = node;
 	}
@@ -32,7 +36,7 @@ void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev) {
         return;
 	}
 	if (prev != NULL && prev->next == NULL) {
-        fprintf(stderr, "Trying to remove node after tail of linked list\n");
+        // Trying to remove node after tail of linked list
         return;
 	}
 
@@ -211,12 +215,33 @@ struct SparseTsetlinMachine *stm_load_dense(
         return NULL;
     }
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
+    	struct TAStateNode *prev_ptr = NULL;
     	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+
         for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-			curr_ptr->ta_state = flat_states[(clause_id * stm->num_literals) * 2 + i];
-			curr_ptr = curr_ptr->next;
+        	if (flat_states[clause_id * stm->num_literals * 2 + i] > stm->min_state + 5) {
+				curr_ptr->ta_state = flat_states[clause_id * stm->num_literals * 2 + i];
+				prev_ptr = curr_ptr;
+				curr_ptr = curr_ptr->next;
+        	}
+        	else {
+        		ta_state_remove(stm->ta_state + clause_id, prev_ptr);
+            	if (prev_ptr == NULL) {
+            		curr_ptr = stm->ta_state[clause_id];
+            	}
+            	else {
+            		curr_ptr = prev_ptr->next;
+            	}
+        	}
         }
     }
+//    for (uint32_t clause_id = 0; clause_id < 1; clause_id++) {
+//    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+//        while (curr_ptr != NULL && curr_ptr->ta_id / 2 < 100) {
+//        	printf("%d %d\n", curr_ptr->ta_id / 2, curr_ptr->ta_state);
+//        	curr_ptr = curr_ptr->next;
+//        }
+//    }
     free(flat_states);
 
     fclose(file);
@@ -288,9 +313,9 @@ void stm_save(struct SparseTsetlinMachine *stm, const char *filename) {
 				fprintf(stderr, "Failed to write node ta_id\n");
 				goto save_error;
     		}
-    		written = fwrite(&curr_ptr->ta_id, sizeof(int8_t), 1, file);
+    		written = fwrite(&curr_ptr->ta_state, sizeof(int8_t), 1, file);
 			if (written != 1) {
-				fprintf(stderr, "Failed to write node ta_id\n");
+				fprintf(stderr, "Failed to write node ta_state\n");
 				goto save_error;
     		}
 			curr_ptr = curr_ptr->next;
@@ -405,7 +430,6 @@ static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uin
 		}
 		if (empty_clause) {
 			stm->clause_output[clause_id] = 0;
-			break;
 		}
     }
 }

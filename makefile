@@ -3,7 +3,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
 C_SRC = src/c/src/tsetlin_machine.c src/c/src/sparse_tsetlin_machine.c src/c/src/utility.c
-C_TESTS_SRC = tests/c/test_tsetlin_machine.c tests/c/unity/unity.c
+C_TESTS_SRC = tests/c/unity/unity.c tests/c/test_runner.c tests/c/test_tsetlin_machine.c tests/c/test_linked_list.c
 BUILD_DIR = build
 INCLUDE = -I src/c/include
 
@@ -33,7 +33,9 @@ run_mnist_demo_c: mnist_demo
 run_mnist_demo_py:
 	poetry run python demos/mnist/python/demo.py
 
-run_model_size_demo: model_size_demo
+run_model_size_demo: run_model_size_demo_c
+
+run_model_size_demo_c: model_size_demo
 	./$(BUILD_DIR)/model_size_demo
 
 run_tests: run_tests_c

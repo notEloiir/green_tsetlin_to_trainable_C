@@ -29,12 +29,12 @@ int main() {
     print_fsize("build/dense.bin");
 
     struct SparseTsetlinMachine *stm = stm_load_dense(file_path, 1, sizeof(int32_t));
-    if (tm == NULL) {
-		perror("tm_load failed");
+    if (stm == NULL) {
+		perror("stm_load_dense failed");
 		return 1;
 	}
-    tm_save(tm, "build/sparse.bin");
-    tm_free(tm);
+    stm_save(stm, "build/sparse.bin");
+    stm_free(stm);
     print_fsize("build/sparse.bin");
 
     return 0;

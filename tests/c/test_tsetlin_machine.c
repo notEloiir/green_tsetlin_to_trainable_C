@@ -1,13 +1,7 @@
-#include "../../src/c/include/tsetlin_machine.h"
-#include "../../src/c/include/tm_output_activation.h"
+#include "tsetlin_machine.h"
 #include "unity/unity.h"
 #include "stdlib.h"
 
-
-void setUp(void) {
-    srand(42);
-}
-void tearDown(void) {}
 
 void basic_inference(void) {
     struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
@@ -18,8 +12,8 @@ void basic_inference(void) {
     // And its vote has weight 1
     tm->weights[0] = 1;
     // Set output_activation to binary vector, instead of default class argmax
-    tm_set_output_activation(tm, oa_bin_vector);
-    tm_set_calculate_feedback(tm, feedback_bin_vector);  // Not used here, real usage example
+    tm_set_output_activation(tm, tm_oa_bin_vector);
+    tm_set_calculate_feedback(tm, tm_feedback_bin_vector);  // Not used here, real usage example
     // Allocate memory for X and y_pred
     uint8_t *X = malloc(3 * sizeof(uint8_t));
     uint8_t *y_pred = malloc(1 * sizeof(uint8_t));
@@ -52,8 +46,8 @@ void basic_training(void) {
     // And its vote has weight 1
     tm->weights[0] = 1;
     // Set output_activation to binary vector, instead of default class argmax
-    tm_set_output_activation(tm, oa_bin_vector);
-    tm_set_calculate_feedback(tm, feedback_bin_vector);  // Not used here, real usage example
+    tm_set_output_activation(tm, tm_oa_bin_vector);
+    tm_set_calculate_feedback(tm, tm_feedback_bin_vector);  // Not used here, real usage example
     // Allocate memory for X and y_pred
     uint8_t *X = malloc(3 * sizeof(uint8_t));
     uint8_t *y_pred = malloc(1 * sizeof(uint8_t));
@@ -78,11 +72,7 @@ void basic_training(void) {
     free(y);
 }
 
-int main(void) {
-    UNITY_BEGIN();
-
+void test_tsetlin_machine_run_all(void) {
     RUN_TEST(basic_inference);
     RUN_TEST(basic_training);
-
-    return UNITY_END();
 }

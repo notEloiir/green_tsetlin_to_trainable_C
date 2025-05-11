@@ -153,6 +153,11 @@ struct TsetlinMachine *tm_load(
         fclose(file);
         return NULL;
     }
+//    for (uint32_t clause_id = 0; clause_id < 1; clause_id++) {
+//    	for (uint32_t i = 0; i < 100; i++) {
+//        	printf("%d %d\n", i / 2, tm->ta_state[clause_id * num_literals * 2 + i]);
+//        }
+//    }
 
     fclose(file);
     return tm;
@@ -183,43 +188,32 @@ void tm_save(struct TsetlinMachine *tm, const char *filename) {
         fprintf(stderr, "Failed to write num_clauses\n");
         goto save_error;
     }
-
-    // 4. num_classes
     written = fwrite(&tm->num_classes, sizeof(uint32_t), 1, file);
     if (written != 1) {
         fprintf(stderr, "Failed to write num_classes\n");
         goto save_error;
     }
-
-    // 5. max_state
     written = fwrite(&tm->max_state, sizeof(int8_t), 1, file);
     if (written != 1) {
         fprintf(stderr, "Failed to write max_state\n");
         goto save_error;
     }
-
-    // 6. min_state
     written = fwrite(&tm->min_state, sizeof(int8_t), 1, file);
     if (written != 1) {
         fprintf(stderr, "Failed to write min_state\n");
         goto save_error;
     }
-
-    // 7. boost_true_positive_feedback
     written = fwrite(&tm->boost_true_positive_feedback, sizeof(uint8_t), 1, file);
     if (written != 1) {
         fprintf(stderr, "Failed to write boost_true_positive_feedback\n");
         goto save_error;
     }
-
-    // 8. s (double)
     written = fwrite(&tm->s, sizeof(double), 1, file);
     if (written != 1) {
         fprintf(stderr, "Failed to write s parameter\n");
         goto save_error;
     }
 
-    // 9. weights array
     size_t n_weights = (size_t)tm->num_clauses * tm->num_classes;
     written = fwrite(tm->weights, sizeof(int16_t), n_weights, file);
     if (written != n_weights) {
@@ -228,7 +222,6 @@ void tm_save(struct TsetlinMachine *tm, const char *filename) {
         goto save_error;
     }
 
-    // 10. ta_state array (two literals per clause)
     size_t n_states = (size_t)tm->num_clauses * tm->num_literals * 2;
     written = fwrite(tm->ta_state, sizeof(int8_t), n_states, file);
     if (written != n_states) {
@@ -320,6 +313,7 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X
         for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
             uint8_t action_include = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0], tm->mid_state);
             uint8_t action_include_negated = action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state);
+            // if (clause_id < 5 && (action_include || action_include_negated)) printf("%d %d%d ", literal_id, action_include, action_include_negated);
 
             empty_clause = (empty_clause && !(action_include || action_include_negated));
 
@@ -328,6 +322,7 @@ static inline void calculate_clause_output(struct TsetlinMachine *tm, uint8_t *X
                 break;
             }
         }
+        // if (clause_id < 5) printf("\n");
 
         if (empty_clause) {
             tm->clause_output[clause_id] = 0;

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "tsetlin_machine.h"
+#include "sparse_tsetlin_machine.h"
 
 
 // Loading data borrowed from https://github.com/ooki/green_tsetlin/blob/master/generator_tests/mnist_test.c
@@ -58,7 +59,8 @@ int main() {
 
     const char *file_path = "data/models/mnist_tm.bin";
     struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
-    if (tm == NULL) {
+    struct SparseTsetlinMachine *stm = stm_load_dense(file_path, 1, sizeof(int32_t));
+    if (tm == NULL || stm == NULL) {
 		perror("tm_load failed");
 		return 1;
 	}
@@ -84,14 +86,17 @@ int main() {
     }
     printf("Loading MNIST data\n");
     load_mnist_data(x_data, y_data);
-    
-    // Evaluate the loaded Tsetlin Machine
-    printf("Evaluating model\n");
+
+    // Evaluate the loaded Tsetlin Machines
     rows = 5000;  // Evaluate on first 5000 rows
+    printf("Evaluating Tsetlin Machine model\n");
     tm_evaluate(tm, x_data, y_data, rows);
+    printf("Evaluating Sparse Tsetlin Machine model\n");
+    stm_evaluate(stm, x_data, y_data, rows);
 
 	// Clean up
     tm_free(tm);
+    stm_free(stm);
     free(x_data);
     free(y_data);
     
