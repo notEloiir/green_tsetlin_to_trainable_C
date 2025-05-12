@@ -1,0 +1,28 @@
+// IDL file for Tsetlin Machine
+// 
+// The model is based on the `green_tsetlin` library
+// (https://github.com/ooki/green_tsetlin).
+//
+// The model state in `green_tsetlin` is represented as:
+// - number of classes
+// - threshold
+// - number of literals
+// - number of clauses
+// - maximum state
+// - minimum state
+// - boost true positive feedback
+// - "s" ?
+//
+// - weights
+// - clauses
+//
+// The model does not include:
+// - names of literals
+//
+// In the future, we may consider adding:
+// - graph structure (operators + dataflow)
+// - versioning and metadata
+
+
+namespace TsetlinMachine;
+
