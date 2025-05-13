@@ -1,19 +1,27 @@
-# green_tsetlin to trainable C  
-Move model from green_tsetlin to a file, then interpret it in C.  
-From: https://github.com/ooki/green_tsetlin  
-To a custom interpreter, originally based on: https://github.com/cair/TsetlinMachineC  
+# Tsetlin Machine C
+C library for Tsetlin Machines.
 
-# Requirements  
-- python  
-- poetry - `pip install poetry`  
+## Features
+- C library for Tsetlin Machines: inference, training, saving to / loading from bin files
+- TM types: normal (dense), sparse, stateless (sparse)
+- model import from green_tsetlin https://github.com/ooki/green_tsetlin
 
-# Install  
-- `git clone https://github.com/notEloiir/green_tsetlin_to_trainable_C.git`  
-- `cd green_tsetlin_to_trainable_C`  
-- `poetry install --no-root`  
+## Requirements
+- gcc
+- make (optional)
+- python (optional - importing models from green_tsetlin, demo data)
+- uv (optional - if importing models from green_tsetlin, demo data)
 
-# Run demo
-- `poetry run make && make clean`  
+## Install
+- `git clone https://github.com/notEloiir/green_tsetlin_to_trainable_C.git`
+- `cd green_tsetlin_to_trainable_C`
+- `uv sync` (if using uv)
 
-# Run tests
-- `make run_tests && make clean`  
+## Run demos
+- MNIST inference using pretrained (dense) model, test data downloaded by python script
+    - `uv run make`
+- Model size comparison of different TM types loading a pretrained (dense) model
+    - `make run_model_size_demo`
+
+## Run tests
+- `make run_tests`
