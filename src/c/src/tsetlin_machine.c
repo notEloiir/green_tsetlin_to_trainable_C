@@ -153,11 +153,6 @@ struct TsetlinMachine *tm_load(
         fclose(file);
         return NULL;
     }
-//    for (uint32_t clause_id = 0; clause_id < 1; clause_id++) {
-//    	for (uint32_t i = 0; i < 100; i++) {
-//        	printf("%d %d\n", i / 2, tm->ta_state[clause_id * num_literals * 2 + i]);
-//        }
-//    }
 
     fclose(file);
     return tm;

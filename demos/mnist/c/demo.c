@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "tsetlin_machine.h"
 #include "sparse_tsetlin_machine.h"
+#include "stateless_tsetlin_machine.h"
 
 
 // Loading data borrowed from https://github.com/ooki/green_tsetlin/blob/master/generator_tests/mnist_test.c
@@ -60,7 +62,8 @@ int main() {
     const char *file_path = "data/models/mnist_tm.bin";
     struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
     struct SparseTsetlinMachine *stm = stm_load_dense(file_path, 1, sizeof(int32_t));
-    if (tm == NULL || stm == NULL) {
+    struct StatelessTsetlinMachine *sltm = sltm_load_dense(file_path, 1, sizeof(int32_t));
+    if (tm == NULL || stm == NULL || sltm == NULL) {
 		perror("tm_load failed");
 		return 1;
 	}
@@ -88,15 +91,31 @@ int main() {
     load_mnist_data(x_data, y_data);
 
     // Evaluate the loaded Tsetlin Machines
+    clock_t start_clock, end_clock;
     rows = 5000;  // Evaluate on first 5000 rows
+
     printf("Evaluating Tsetlin Machine model\n");
+    start_clock = clock();
     tm_evaluate(tm, x_data, y_data, rows);
+    end_clock = clock();
+    printf("Tsetlin Machine time: %f[s]\n", ((double) (end_clock - start_clock)) / CLOCKS_PER_SEC);
+
     printf("Evaluating Sparse Tsetlin Machine model\n");
+    start_clock = clock();
     stm_evaluate(stm, x_data, y_data, rows);
+    end_clock = clock();
+    printf("Sparse Tsetlin Machine time: %f[s]\n", ((double) (end_clock - start_clock)) / CLOCKS_PER_SEC);
+
+    printf("Evaluating Stateless (Sparse) Tsetlin Machine model\n");
+    start_clock = clock();
+    sltm_evaluate(sltm, x_data, y_data, rows);
+    end_clock = clock();
+    printf("Stateless (Sparse) Tsetlin Machine time: %f[s]\n", ((double) (end_clock - start_clock)) / CLOCKS_PER_SEC);
 
 	// Clean up
     tm_free(tm);
     stm_free(stm);
+    sltm_free(sltm);
     free(x_data);
     free(y_data);
     
