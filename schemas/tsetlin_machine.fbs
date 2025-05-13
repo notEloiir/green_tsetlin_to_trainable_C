@@ -11,7 +11,7 @@
 // - maximum state
 // - minimum state
 // - boost true positive feedback
-// - "s" ?
+// - s parameter
 //
 // - weights
 // - clauses
@@ -26,3 +26,33 @@
 
 namespace TsetlinMachine;
 
+
+table TMParameters {
+  threshold:    uint;   // tsetlin automaton threshold
+  num_literals: uint;   // total number of literals
+  num_clauses:  uint;   // total number of clauses
+  num_classes:  uint;   // number of output classes
+  max_state:    byte;   // maximum state for automaton
+  min_state:    byte;   // minimum state for automaton
+  boost_tp:     ubyte;  // boost true positive feedback
+  s:            double; // s parameter
+} // https://flatbuffers.dev/schema/#scalars
+
+table ClauseWeightsTensor {
+  weights: [short]; // clause weights
+  shape:   [uint];  // dimensions e.g. [num_clauses, num_classes]
+}
+
+table AutomatonStatesTensor {
+  states: [byte]; // automaton states
+  shape:  [uint]; // dimensions e.g. [num_clauses, num_literals, 2]
+}
+
+table TsetlinMachineModel {
+  params:           TMParameters          (required); // model hyperparameters
+  automaton_states: AutomatonStatesTensor (required); // automaton states
+  clause_weights:   ClauseWeightsTensor   (required); // clause weights
+  literal_names:    [string];                         // names of literals
+}
+
+root_type TsetlinMachineModel;
