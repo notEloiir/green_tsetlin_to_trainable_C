@@ -9,7 +9,7 @@ INCLUDE = -I src/c/include
 
 
 # === Default target ===
-all: run_demo
+all: run_mnist_demo
 
 # === File targets ===
 mnist_demo: $(C_SRC) demos/mnist/c/demo.c

@@ -1,7 +1,7 @@
 [project]
-name = "green-tsetlin-to-trainable-c"
+name = "TsetlinMachineC"
 version = "0.1.0"
-description = "Add your description here"
+description = "C library for Tsetlin Machines."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
