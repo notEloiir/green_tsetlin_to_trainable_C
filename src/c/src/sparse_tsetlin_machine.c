@@ -235,13 +235,6 @@ struct SparseTsetlinMachine *stm_load_dense(
         	}
         }
     }
-//    for (uint32_t clause_id = 0; clause_id < 1; clause_id++) {
-//    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-//        while (curr_ptr != NULL && curr_ptr->ta_id / 2 < 100) {
-//        	printf("%d %d\n", curr_ptr->ta_id / 2, curr_ptr->ta_state);
-//        	curr_ptr = curr_ptr->next;
-//        }
-//    }
     free(flat_states);
 
     fclose(file);
