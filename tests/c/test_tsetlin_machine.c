@@ -1,6 +1,9 @@
-#include "tsetlin_machine.h"
+#include "../../src/c/include/tsetlin_machine.h"
 #include "unity/unity.h"
 #include "stdlib.h"
+
+#include "../../src/c/src/tsetlin_machine.c"
+#include "../../src/c/src/utility.c"
 
 
 void basic_inference(void) {
@@ -72,7 +75,121 @@ void basic_training(void) {
     free(y);
 }
 
+void test_calculate_clause_output(void) {
+    struct TsetlinMachine *tm = tm_create(1, 50, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+    tm->ta_state[0] = 100;
+    tm->ta_state[1] = -100;
+    tm->ta_state[2] = 100;
+    tm->ta_state[3] = -100;
+    tm->ta_state[4] = -100;
+    tm->ta_state[5] = 100;
+    tm->ta_state[6] = -100;
+    tm->ta_state[7] = 100;
+
+    uint8_t X[] = {1, 1};
+
+    calculate_clause_output(tm, X);
+    TEST_ASSERT_EQUAL_INT(1, tm->clause_output[0]);
+    TEST_ASSERT_EQUAL_INT(0, tm->clause_output[1]);
+
+    tm_free(tm);
+}
+
+void test_sum_votes(void) {
+    struct TsetlinMachine *tm = tm_create(2, 100, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+
+    tm->clause_output[0] = 1;
+    tm->clause_output[1] = 0;
+
+    tm->weights[0] = 5;
+    tm->weights[1] = 0;
+    tm->weights[3] = 1;
+    tm->weights[4] = 10;
+
+    sum_votes(tm);
+
+    TEST_ASSERT_EQUAL_INT(5, tm->votes[0]);
+    TEST_ASSERT_EQUAL_INT(0, tm->votes[1]);
+
+    tm_free(tm);
+}
+
+
+void test_type_1a_feedback(void) {
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 10.f);
+    tm->ta_state[0] = 1; tm->ta_state[1] = -1;
+    tm->ta_state[2] = -1; tm->ta_state[3] = 1;
+    tm->ta_state[4] = -1; tm->ta_state[5] = -1;
+
+    tm->weights[0] = 1;
+    tm->feedback[0] = 1;
+
+    uint8_t X[] = {1, 0, 0};
+
+    type_1a_feedback(tm, X);
+
+    TEST_ASSERT_EQUAL_INT(2, tm->weights[0]);
+
+    TEST_ASSERT_EQUAL_INT(2, tm->ta_state[0]);
+    TEST_ASSERT_EQUAL_INT(2, tm->ta_state[3]);
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[5]);
+
+    TEST_ASSERT_EQUAL_INT(-1, tm->ta_state[1]);
+    TEST_ASSERT_EQUAL_INT(-1, tm->ta_state[2]);
+    TEST_ASSERT_EQUAL_INT(-1, tm->ta_state[4]);
+
+    tm_free(tm);
+}
+
+void test_type_1b_feedback(void) {
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f);
+    tm->feedback[1] = 1;
+
+    tm->ta_state[0] = 1; tm->ta_state[1] = -1;
+    tm->ta_state[2] = -1; tm->ta_state[3] = 1;
+    tm->ta_state[4] = -1; tm->ta_state[5] = -1;
+
+    type_1b_feedback(tm);
+
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[0]);
+    TEST_ASSERT_EQUAL_INT(-2, tm->ta_state[1]);
+    TEST_ASSERT_EQUAL_INT(-2, tm->ta_state[2]);
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[3]);
+    TEST_ASSERT_EQUAL_INT(-2, tm->ta_state[4]);
+    TEST_ASSERT_EQUAL_INT(-2, tm->ta_state[5]);
+
+    tm_free(tm);
+}
+
+void test_type_2_feedback(void) {
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f);
+    tm->feedback[2] = 1;
+
+    tm->ta_state[0] = 1; tm->ta_state[1] = -1;
+    tm->ta_state[2] = -1; tm->ta_state[3] = 1;
+    tm->ta_state[4] = -1; tm->ta_state[5] = -1;
+
+    uint8_t X[] = {1, 0, 1};
+
+    type_2_feedback(tm, X);
+
+    TEST_ASSERT_EQUAL_INT(1, tm->ta_state[0]);
+    TEST_ASSERT_EQUAL_INT(1, tm->ta_state[3]);
+    TEST_ASSERT_EQUAL_INT(-1, tm->ta_state[4]);
+
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[1]);
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[2]);
+    TEST_ASSERT_EQUAL_INT(0, tm->ta_state[5]);
+
+    tm_free(tm);
+}
+
 void test_tsetlin_machine_run_all(void) {
     RUN_TEST(basic_inference);
     RUN_TEST(basic_training);
+    RUN_TEST(test_calculate_clause_output);
+    RUN_TEST(test_sum_votes);
+    RUN_TEST(test_type_1a_feedback);
+    RUN_TEST(test_type_1b_feedback);
+    RUN_TEST(test_type_2_feedback);
 }

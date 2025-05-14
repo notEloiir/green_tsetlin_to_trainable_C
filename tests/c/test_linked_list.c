@@ -3,6 +3,8 @@
 #include "stdlib.h"
 
 
+#include "../../src/c/src/sparse_tsetlin_machine.c"
+
 void insert_nodes(void) {
 	struct TAStateNode *head = NULL;
 	struct TAStateNode **head_ptr = &head;

@@ -20,7 +20,7 @@ model_size_demo: $(C_SRC) demos/model_size/c/demo.c
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
-tests: $(C_SRC) $(C_TESTS_SRC)
+tests: $(C_TESTS_SRC)
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
