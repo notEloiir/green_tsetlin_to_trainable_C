@@ -10,6 +10,7 @@ from sklearn.utils import shuffle
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../src/python')))
 from gt_to_bin import save_to_bin
+from gt_to_fbs import save_to_fbs
 
 
 if __name__ == "__main__":
@@ -55,6 +56,7 @@ if __name__ == "__main__":
     tm.load_state("data/demos/mnist/mnist_state.npz")
 
     save_to_bin(tm, "data/models/mnist_tm.bin")
+    save_to_fbs(tm, "data/models/mnist_tm.fbs")
 
     correct = 0
     correct2 = 0
