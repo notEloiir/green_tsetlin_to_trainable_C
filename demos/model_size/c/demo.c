@@ -4,6 +4,7 @@
 
 #include "tsetlin_machine.h"
 #include "sparse_tsetlin_machine.h"
+#include "stateless_tsetlin_machine.h"
 
 
 void print_fsize(const char *filename) {
@@ -36,6 +37,15 @@ int main() {
     stm_save(stm, "build/sparse.bin");
     stm_free(stm);
     print_fsize("build/sparse.bin");
+
+    struct StatelessTsetlinMachine *sltm = sltm_load_dense(file_path, 1, sizeof(int32_t));
+    if (sltm == NULL) {
+		perror("sltm_load_dense failed");
+		return 1;
+	}
+    sltm_save(sltm, "build/stateless.bin");
+    sltm_free(sltm);
+    print_fsize("build/stateless.bin");
 
     return 0;
 }
