@@ -66,6 +66,11 @@ uint8_t stm_y_eq_generic(const struct SparseTsetlinMachine *stm, const void *y, 
 
 void stm_initialize(struct SparseTsetlinMachine *stm);
 
+// Translates automaton state to action - 0 or 1
+static inline uint8_t action(int8_t state, int8_t mid_state) {
+    return state >= mid_state;
+}
+
 // Allocate memory, fill in fields, calls stm_initialize
 struct SparseTsetlinMachine *stm_create(
     uint32_t num_classes, uint32_t threshold, uint32_t num_literals, uint32_t num_clauses,
@@ -219,7 +224,7 @@ struct SparseTsetlinMachine *stm_load_dense(
     	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
 
         for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        	if (flat_states[clause_id * stm->num_literals * 2 + i] > stm->min_state + 5) {
+        	if (action(flat_states[clause_id * stm->num_literals * 2 + i], stm->mid_state)) {
 				curr_ptr->ta_state = flat_states[clause_id * stm->num_literals * 2 + i];
 				prev_ptr = curr_ptr;
 				curr_ptr = curr_ptr->next;
@@ -395,11 +400,6 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
             stm->weights[(clause_id * stm->num_classes) + class_id] = 1 - 2*(1.0 * rand()/RAND_MAX <= 0.5);
         }
     }
-}
-
-// Translates automaton state to action - 0 or 1
-static inline uint8_t action(int8_t state, int8_t mid_state) {
-    return state >= mid_state;
 }
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
