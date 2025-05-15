@@ -18,8 +18,12 @@ C library for Tsetlin Machines.
 - `uv sync` (if using uv)
 
 ## Run demos
+- MNIST training, data downloaded by python script
+    - `uv run make run_mnist_demo`
+    - `make run_mnist_demo_c` after first run
 - MNIST inference using pretrained (dense) model, test data downloaded by python script
-    - `uv run make`
+    - `uv run make run_mnist_inference_demo`
+    - `make run_mnist_inference_demo_c` after first run
 - Model size comparison of different TM types loading a pretrained (dense) model
     - `make run_model_size_demo`
 

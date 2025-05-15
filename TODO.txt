@@ -1,2 +1,0 @@
-- unit tests for C tsetlin_machine
-- proper docs

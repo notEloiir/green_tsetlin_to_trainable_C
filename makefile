@@ -12,7 +12,11 @@ INCLUDE = -I src/c/include
 all: run_mnist_demo
 
 # === File targets ===
-mnist_demo: $(C_SRC) demos/mnist/c/demo.c
+mnist_demo_inference: $(C_SRC) demos/mnist/c/mnist_util.c demos/mnist/c/pretrained_inference_demo.c
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
+
+mnist_demo: $(C_SRC) demos/mnist/c/mnist_util.c demos/mnist/c/training_demo.c
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
@@ -25,13 +29,21 @@ tests: $(C_TESTS_SRC)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
 # === Run targets ===
+run_mnist_inference_demo: run_mnist_inference_demo_py run_mnist_inference_demo_c
+
+run_mnist_inference_demo_c: mnist_demo_inference
+	./$(BUILD_DIR)/mnist_demo_inference
+
+run_mnist_inference_demo_py:
+	python demos/mnist/python/get_pretrained.py
+
 run_mnist_demo: run_mnist_demo_py run_mnist_demo_c
 
 run_mnist_demo_c: mnist_demo
 	./$(BUILD_DIR)/mnist_demo
 
 run_mnist_demo_py:
-	poetry run python demos/mnist/python/demo.py
+	python demos/mnist/python/get_data.py
 
 run_model_size_demo: run_model_size_demo_c
 
