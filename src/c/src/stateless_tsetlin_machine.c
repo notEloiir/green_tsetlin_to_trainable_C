@@ -124,13 +124,6 @@ struct StatelessTsetlinMachine *sltm_create(
         sltm_free(sltm);
         return NULL;
     }
-    
-    sltm->feedback = (int8_t *)malloc(num_clauses * num_classes * sizeof(int8_t));  // shape: (num_clauses, num_classes, 3)
-    if (sltm->feedback == NULL) {
-        perror("Memory allocation failed");
-        sltm_free(sltm);
-        return NULL;
-    }
 
     sltm->votes = (int32_t *)malloc(num_classes * sizeof(int32_t));  // shape: (num_classes)
     if (sltm->votes == NULL) {
@@ -348,10 +341,6 @@ void sltm_free(struct StatelessTsetlinMachine *sltm) {
             free(sltm->clause_output);
         }
         
-        if (sltm->feedback != NULL) {
-            free(sltm->feedback);
-        }
-        
         if (sltm->votes != NULL) {
             free(sltm->votes);
         }
@@ -455,6 +444,7 @@ void sltm_evaluate(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y, ui
         total++;
     }
     printf("correct: %d, total: %d, ratio: %.2f \n", correct, total, (float) correct / total);
+    free(y_pred);
 }
 
 
@@ -499,57 +489,4 @@ void sltm_set_output_activation(
     void (*output_activation)(const struct StatelessTsetlinMachine *sltm, void *y_pred)
 ) {
     sltm->output_activation = output_activation;
-}
-
-
-// --- Basic output_activation_pseudograd functions ---
-
-void sltm_feedback_class_idx(const struct StatelessTsetlinMachine *sltm, const void *y, uint32_t clause_id) {
-    const uint32_t *label = (const uint32_t *)y;
-
-    // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < sltm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(sltm->votes[class_id], (int32_t)sltm->threshold);
-        float update_probability = ((float)votes_clipped + (float)sltm->threshold) / (float)(2 * sltm->threshold);
-        int8_t *clause_feedback = sltm->feedback + ((clause_id * sltm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
-
-        if (class_id == *label) {
-            // Correct vote
-            if (sltm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
-            }
-        }
-        else if (sltm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
-    }
-}
-
-void sltm_feedback_bin_vector(const struct StatelessTsetlinMachine *sltm, const void *y, uint32_t clause_id) {
-    uint8_t *y_bin_vec = (uint8_t *)y;
-
-    // Correct votes gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < sltm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(sltm->votes[class_id], (int32_t)sltm->threshold);
-        float update_probability = ((float)votes_clipped + (float)sltm->threshold) / (float)(2 * sltm->threshold);
-        int8_t *clause_feedback = sltm->feedback + ((clause_id * sltm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
-
-        if ((sltm->votes[class_id] > sltm->mid_state) == y_bin_vec[class_id]) {
-            // Correct vote
-            if (sltm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
-            }
-        }
-        else if (sltm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
-    }
 }

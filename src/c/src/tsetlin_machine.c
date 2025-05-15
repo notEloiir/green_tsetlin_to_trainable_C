@@ -67,7 +67,7 @@ struct TsetlinMachine *tm_create(
         return NULL;
     }
     
-    tm->feedback = (int8_t *)malloc(num_clauses * num_classes * sizeof(int8_t));  // shape: (num_clauses, num_classes, 3)
+    tm->feedback = (int8_t *)malloc(num_clauses * num_classes * 3 * sizeof(int8_t));  // shape: (num_clauses, num_classes, 3)
     if (tm->feedback == NULL) {
         perror("Memory allocation failed");
         tm_free(tm);
@@ -453,7 +453,7 @@ static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X) {
 void tm_train(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs) {
     for (uint32_t epoch = 0; epoch < epochs; epoch++) {
         for (uint32_t batch = 0; batch < rows / batch_size; batch++) {
-            memset(tm->feedback, 0, tm->num_clauses * tm->num_clauses * 3);
+            memset(tm->feedback, 0, tm->num_clauses * tm->num_classes * 3);
 
             uint32_t start_idx, stop_idx;
             start_idx = batch * batch_size;
@@ -528,6 +528,7 @@ void tm_evaluate(struct TsetlinMachine *tm, uint8_t *X, void *y, uint32_t rows) 
         total++;
     }
     printf("correct: %d, total: %d, ratio: %.2f \n", correct, total, (float) correct / total);
+    free(y_pred);
 }
 
 
