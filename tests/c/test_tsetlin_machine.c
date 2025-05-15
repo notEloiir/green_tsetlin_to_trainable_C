@@ -102,14 +102,14 @@ void test_sum_votes(void) {
     tm->clause_output[1] = 0;
 
     tm->weights[0] = 5;
-    tm->weights[1] = 0;
-    tm->weights[3] = 1;
-    tm->weights[4] = 10;
+    tm->weights[1] = -2;
+    tm->weights[2] = -3;
+    tm->weights[3] = 10;
 
     sum_votes(tm);
 
     TEST_ASSERT_EQUAL_INT(5, tm->votes[0]);
-    TEST_ASSERT_EQUAL_INT(0, tm->votes[1]);
+    TEST_ASSERT_EQUAL_INT(-2, tm->votes[1]);
 
     tm_free(tm);
 }
