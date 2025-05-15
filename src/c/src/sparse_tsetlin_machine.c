@@ -459,6 +459,9 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
             uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 0];
+            if (!feedback_strength) {
+                continue;
+            }
 
             if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
             	uint8_t delta = min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
@@ -495,6 +498,9 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm) {
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
             uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
+            if (!feedback_strength) {
+                continue;
+            }
 
             struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
             for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
@@ -515,6 +521,9 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X)
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
             uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
+            if (!feedback_strength) {
+                continue;
+            }
 
             stm->weights[clause_id * stm->num_classes + class_id] +=
                 stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
