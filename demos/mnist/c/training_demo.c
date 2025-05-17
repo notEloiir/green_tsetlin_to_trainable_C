@@ -10,16 +10,17 @@
 int main() {
     srand(42);
 
+    // Parameters like in green_tsetlin
     uint32_t num_classes = 10;
-    uint32_t threshold = 1000;
+    uint32_t threshold = 1200;
     uint32_t num_literals = 784;
-    uint32_t num_clauses = 1000;
+    uint32_t num_clauses = 6000;
     int8_t max_state = 127;
     int8_t min_state = -127;
-    uint8_t boost_true_positive_feedback = 0;
+    uint8_t boost_true_positive_feedback = 1;
     uint32_t y_size = 1;
     uint32_t y_element_size = sizeof(int32_t);
-    float s = 10.0f;
+    float s = 20.0f;
 
     struct TsetlinMachine *tm = tm_create(num_classes, threshold, num_literals, num_clauses,
         max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
@@ -48,10 +49,13 @@ int main() {
     int32_t *y_test = y_data + 60000;
 
     // Train models
-    train_models(tm, NULL, x_train, y_train, 1000);
+    train_models(tm, NULL, x_train, y_train, 10000);
 
     // Evaluate models
-    evaluate_models(tm, NULL, NULL, x_test, y_test, 1000);
+    printf("\nEvaluating models on train data\n");
+    evaluate_models(tm, NULL, NULL, x_train, y_train, 10000);
+    printf("\nEvaluating models on test data\n");
+    evaluate_models(tm, NULL, NULL, x_test, y_test, 10000);
 
 	// Clean up
     tm_free(tm);

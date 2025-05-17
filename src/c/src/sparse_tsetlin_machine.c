@@ -404,7 +404,7 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
 // Output is stored an internal output array clause_output
-static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uint8_t *X) {
+static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uint8_t *X, uint8_t skip_empty) {
     // For each clause, check if it is "active" - all necessary literals have the right value
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         stm->clause_output[clause_id] = 1;
@@ -421,7 +421,7 @@ static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uin
 			}
 			curr_ptr = curr_ptr->next;
 		}
-		if (empty_clause) {
+		if (empty_clause && skip_empty) {
 			stm->clause_output[clause_id] = 0;
 		}
     }
@@ -452,63 +452,55 @@ static inline void sum_votes(struct SparseTsetlinMachine *stm) {
 // Clause at clause_id voted correctly for class at class_id
 
 // Type a - Clause is active for literals X (clause_output == 1)
-static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X) {
+static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
     // float s_min1_inv = (stm->s - 1.0f) / stm->s;
 
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 0];
-            if (!feedback_strength) {
-                continue;
-            }
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 0];
+    if (!feedback_strength) {
+        return;
+    }
 
-            if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
-            	uint8_t delta = min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
-				stm->weights[clause_id * stm->num_classes + class_id] += delta;
-			}
-			else {
-				uint8_t delta = min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
-				stm->weights[clause_id * stm->num_classes + class_id] += delta;
-			}
-            
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-            for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-            	// X[i / 2] should equal action at ta_id==i
-            	if (action(curr_ptr->ta_state, stm->mid_state) && curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
-					// Correct, reward
-            		uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-            		curr_ptr->ta_state += delta * (stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
-				}
-            	else {
-            		uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-            		curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
-            	}
-            	curr_ptr = curr_ptr->next;
-            }
+    if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
+        uint8_t delta = min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
+        stm->weights[clause_id * stm->num_classes + class_id] += delta;
+    }
+    else {
+        uint8_t delta = min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
+        stm->weights[clause_id * stm->num_classes + class_id] -= delta;
+    }
+    
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+        // X[i / 2] should equal action at ta_id==i
+        if (action(curr_ptr->ta_state, stm->mid_state) && curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
+            // Correct, reward
+            uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
+            curr_ptr->ta_state += delta * (stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
         }
+        else {
+            uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
+            curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
+        }
+        curr_ptr = curr_ptr->next;
     }
 }
 
 
 // Type b - Clause is inactive for literals X (clause_output == 0)
-static inline void type_1b_feedback(struct SparseTsetlinMachine *stm) {
+static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
 
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
-            if (!feedback_strength) {
-                continue;
-            }
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
+    if (!feedback_strength) {
+        return;
+    }
 
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-            for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        		uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-        		curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
-            	curr_ptr = curr_ptr->next;
-            }
-        }
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+        uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
+        curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
+        curr_ptr = curr_ptr->next;
     }
 }
 
@@ -517,24 +509,20 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm) {
 // Clause at clause_id voted incorrectly for class at class_id
 // && Clause is active for literals X (clause_output == 1)
 
-static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X) {
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
-            if (!feedback_strength) {
-                continue;
-            }
+static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
+    if (!feedback_strength) {
+        return;
+    }
 
-            stm->weights[clause_id * stm->num_classes + class_id] +=
-                stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
+    stm->weights[clause_id * stm->num_classes + class_id] +=
+        stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-			for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        		uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-        		curr_ptr->ta_state += delta * (0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
-            	curr_ptr = curr_ptr->next;
-			}
-        }
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+        uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
+        curr_ptr->ta_state += delta * (0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
+        curr_ptr = curr_ptr->next;
     }
 }
 
@@ -542,7 +530,7 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X)
 void stm_train(struct SparseTsetlinMachine *stm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs) {
     for (uint32_t epoch = 0; epoch < epochs; epoch++) {
         for (uint32_t batch = 0; batch < rows / batch_size; batch++) {
-            memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3);
+            memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
 
             uint32_t start_idx, stop_idx;
             start_idx = batch * batch_size;
@@ -552,7 +540,7 @@ void stm_train(struct SparseTsetlinMachine *stm, uint8_t *X, void *y, uint32_t r
                 uint8_t *X_row = X + (row * stm->num_literals);
                 void *y_row = (void *)((uint8_t *)y + (row * stm->y_size * stm->y_element_size));
 
-                calculate_clause_output(stm, X_row);
+                calculate_clause_output(stm, X_row, 0);
 
                 // Iterate over all clauses, not only active ones (1b)
                 // Calculate pseudo gradient - feedback to clause-class vote weight
@@ -564,13 +552,15 @@ void stm_train(struct SparseTsetlinMachine *stm, uint8_t *X, void *y, uint32_t r
                     }
             
                     stm->calculate_feedback(stm, y_row, clause_id); // accumulate pseudo gradient
+
+                    // Train Individual Automata
+                    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+                        type_1a_feedback(stm, X_row, clause_id, class_id);
+                        type_1b_feedback(stm, clause_id, class_id);
+                        type_2_feedback(stm, X_row, clause_id, class_id);
+                    }
                 }
             }
-
-            // Train Individual Automata
-            type_1a_feedback(stm, X);
-            type_1b_feedback(stm);
-            type_2_feedback(stm, X);
         }
     }
 }
@@ -584,7 +574,7 @@ void stm_predict(struct SparseTsetlinMachine *stm, uint8_t *X, void *y_pred, uin
         void *y_pred_row = (void *)(((uint8_t *)y_pred) + (row * stm->y_size * stm->y_element_size));
 
         // Calculate clause output
-        calculate_clause_output(stm, X_row);
+        calculate_clause_output(stm, X_row, 1);
 
         // Sum up clause votes for each class
         sum_votes(stm);
@@ -668,53 +658,55 @@ void stm_set_output_activation(
 // --- Basic output_activation_pseudograd functions ---
 
 void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
-    const uint32_t *label = (const uint32_t *)y;
-
     // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(stm->votes[class_id], (int32_t)stm->threshold);
-        float update_probability = ((float)votes_clipped + (float)stm->threshold) / (float)(2 * stm->threshold);
-        int8_t *clause_feedback = stm->feedback + ((clause_id * stm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+    const uint32_t *label_ptr = (const uint32_t *)y;
+    const uint32_t positive_class = *label_ptr;
 
-        if (class_id == *label) {
-            // Correct vote
-            if (stm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
+    int8_t *clause_feedback_positive = stm->feedback + ((clause_id * stm->num_classes + positive_class) * 3);
+    int32_t votes_clipped_positive = clip(stm->votes[positive_class], (int32_t)stm->threshold);
+    float update_probability_positive = ((float)votes_clipped_positive + (float)stm->threshold) / (float)(2 * stm->threshold);
+    if (stm->clause_output[clause_id] == 1) {
+        clause_feedback_positive[0] += (1.0 * rand()/RAND_MAX <= update_probability_positive);
+    }
+    else {
+        clause_feedback_positive[1] += (1.0 * rand()/RAND_MAX <= update_probability_positive);
+    }
+
+    if (stm->clause_output[clause_id] == 0) {
+        return;
+    }
+
+    uint32_t negative_class = 0;
+
+    int32_t sum_votes_clipped_negative = 0;
+    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+        if (class_id != positive_class) {
+            sum_votes_clipped_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+        }
+    }
+    int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+    int32_t accumulated_votes = 0;
+    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+        if (class_id != positive_class) {
+            accumulated_votes += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+            if (accumulated_votes >= random_vote_negative) {
+                negative_class = class_id;
+                break;
             }
         }
-        else if (stm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
+    }
+
+    int8_t *clause_feedback_negative = stm->feedback + ((clause_id * stm->num_classes + negative_class) * 3);
+    int32_t votes_clipped_negative = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+    float update_probability_negative = ((float)votes_clipped_negative + (float)stm->threshold) / (float)(2 * stm->threshold);
+    if (stm->clause_output[clause_id] == 1) {
+        clause_feedback_negative[2] += (1.0 * rand()/RAND_MAX <= update_probability_negative);
     }
 }
 
 void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
-    uint8_t *y_bin_vec = (uint8_t *)y;
-
-    // Correct votes gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(stm->votes[class_id], (int32_t)stm->threshold);
-        float update_probability = ((float)votes_clipped + (float)stm->threshold) / (float)(2 * stm->threshold);
-        int8_t *clause_feedback = stm->feedback + ((clause_id * stm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
-
-        if ((stm->votes[class_id] > stm->mid_state) == y_bin_vec[class_id]) {
-            // Correct vote
-            if (stm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
-            }
-        }
-        else if (stm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
-    }
+    fprintf(stderr, "stm_feedback_bin_vector not implemented\n");
+    exit(1);
 }
 
 
