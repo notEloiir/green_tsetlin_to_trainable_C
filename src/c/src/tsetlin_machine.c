@@ -353,41 +353,38 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, uint8_t *X, uint3
     // float s_min1_inv = (tm->s - 1.0f) / tm->s;
 
     uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 0];
-    uint8_t delta;
     if (!feedback_strength) {
         return;
     }
 
     if (tm->weights[clause_id * tm->num_classes + class_id] >= 0) {
-        delta = min(feedback_strength, SHRT_MAX - tm->weights[clause_id * tm->num_classes + class_id]);
-        tm->weights[clause_id * tm->num_classes + class_id] += delta;
+        tm->weights[clause_id * tm->num_classes + class_id] += min(feedback_strength, SHRT_MAX - tm->weights[clause_id * tm->num_classes + class_id]);
     }
     else {
-        delta = min(feedback_strength, -(SHRT_MIN - tm->weights[clause_id * tm->num_classes + class_id]));
-        tm->weights[clause_id * tm->num_classes + class_id] -= delta;
+        tm->weights[clause_id * tm->num_classes + class_id] -= min(feedback_strength, -(SHRT_MIN - tm->weights[clause_id * tm->num_classes + class_id]));
     }
     
     for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
         if (X[literal_id] == 1) {
             // True positive
-            delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength);
-            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += delta * (
+            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] +=
+				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength) * (
                 (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= tm->s_min1_inv));
 
             // False negative
-            delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength);
-            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= delta * (
+            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
+				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
                 (1.0*rand()/RAND_MAX <= tm->s_inv));
 
         } else {
             // True negative
-            delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength);
-            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += delta * (
+            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] +=
+				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength) * (
                 (1.0*rand()/RAND_MAX <= tm->s_min1_inv));
             
             // False positive
-            delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength);
-            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= delta * (
+            tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
+				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
                 (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] > tm->min_state) && 
                 (1.0*rand()/RAND_MAX <= tm->s_inv));
         }
@@ -400,18 +397,17 @@ static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_i
     // float s_inv = 1.0f / tm->s;
 
     uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 1];
-    uint8_t delta;
     if (!feedback_strength) {
         return;
     }
 
     for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-        delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength);
-        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -= delta * (
+        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
+			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
             (1.0*rand()/RAND_MAX <= tm->s_inv));
 
-        delta = min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength);
-        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -= delta * (
+        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
+			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
             (1.0*rand()/RAND_MAX <= tm->s_inv));
     }
 }
@@ -423,7 +419,6 @@ static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_i
 
 static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     uint8_t feedback_strength = tm->feedback[(clause_id * tm->num_classes + class_id) * 3 + 2];
-    uint8_t delta;
     if (!feedback_strength) {
         return;
     }
@@ -432,13 +427,13 @@ static inline void type_2_feedback(struct TsetlinMachine *tm, uint8_t *X, uint32
         tm->weights[clause_id * tm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
     for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-        delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength);
-        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] += delta * (
+        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] +=
+			min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength) * (
             0 == action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], tm->mid_state) &&
             0 == X[literal_id]);
 
-        delta = min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength);
-        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] += delta * (
+        tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] +=
+			min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength) * (
             0 == action(tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], tm->mid_state) &&
             1 == X[literal_id]);
     }

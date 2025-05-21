@@ -462,12 +462,10 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
     }
 
     if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
-        uint8_t delta = min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
-        stm->weights[clause_id * stm->num_classes + class_id] += delta;
+        stm->weights[clause_id * stm->num_classes + class_id] += min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
     }
     else {
-        uint8_t delta = min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
-        stm->weights[clause_id * stm->num_classes + class_id] -= delta;
+        stm->weights[clause_id * stm->num_classes + class_id] -= min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
     }
     
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
@@ -475,12 +473,14 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
         // X[i / 2] should equal action at ta_id==i
         if (action(curr_ptr->ta_state, stm->mid_state) && curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
             // Correct, reward
-            uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-            curr_ptr->ta_state += delta * (stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
+            curr_ptr->ta_state +=
+				min(stm->max_state - curr_ptr->ta_state, feedback_strength) *
+				(stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
         }
         else {
-            uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-            curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
+            curr_ptr->ta_state -=
+				min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
+				1.0*rand()/RAND_MAX <= stm->s_inv;
         }
         curr_ptr = curr_ptr->next;
     }
@@ -498,8 +498,9 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t c
 
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-        curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
+        curr_ptr->ta_state -=
+			min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
+			1.0*rand()/RAND_MAX <= stm->s_inv;
         curr_ptr = curr_ptr->next;
     }
 }
@@ -520,8 +521,9 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X,
 
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-        curr_ptr->ta_state += delta * (0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
+        curr_ptr->ta_state +=
+			min(stm->max_state - curr_ptr->ta_state, feedback_strength) *
+			(0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
         curr_ptr = curr_ptr->next;
     }
 }
