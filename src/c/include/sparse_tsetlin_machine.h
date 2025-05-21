@@ -97,6 +97,9 @@ void stm_set_output_activation(
 void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id);  // y_size = 1
 void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id);  // y_size = tm->num_classes
 
+// Internal component of feedback functions, included in header if you want to create your own
+void stm_append_feedback(const struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive);
+
 void stm_set_calculate_feedback(
     struct SparseTsetlinMachine *stm,
     void (*calculate_feedback)(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id)

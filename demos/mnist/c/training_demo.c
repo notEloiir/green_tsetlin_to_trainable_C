@@ -14,7 +14,7 @@ int main() {
     uint32_t num_classes = 10;
     uint32_t threshold = 1200;
     uint32_t num_literals = 784;
-    uint32_t num_clauses = 6000;
+    uint32_t num_clauses = 1000;  // better results on 6000 but slower
     int8_t max_state = 127;
     int8_t min_state = -127;
     uint8_t boost_true_positive_feedback = 1;
@@ -49,13 +49,13 @@ int main() {
     int32_t *y_test = y_data + 60000;
 
     // Train models
-    train_models(tm, NULL, x_train, y_train, 10000);
+    train_models(tm, NULL, x_train, y_train, 3000);
 
     // Evaluate models
     printf("\nEvaluating models on train data\n");
-    evaluate_models(tm, NULL, NULL, x_train, y_train, 10000);
+    evaluate_models(tm, NULL, NULL, x_train, y_train, 1000);
     printf("\nEvaluating models on test data\n");
-    evaluate_models(tm, NULL, NULL, x_test, y_test, 10000);
+    evaluate_models(tm, NULL, NULL, x_test, y_test, 1000);
 
 	// Clean up
     tm_free(tm);

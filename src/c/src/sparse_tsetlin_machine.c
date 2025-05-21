@@ -530,27 +530,24 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X,
 void stm_train(struct SparseTsetlinMachine *stm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs) {
     for (uint32_t epoch = 0; epoch < epochs; epoch++) {
         for (uint32_t batch = 0; batch < rows / batch_size; batch++) {
-            memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
+            // memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
 
             uint32_t start_idx, stop_idx;
             start_idx = batch * batch_size;
             stop_idx = (((batch + 1) * batch_size) > rows) ? rows : (batch + 1) * batch_size;
 
             for (uint32_t row = start_idx; row < stop_idx; row++) {
+            	memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
                 uint8_t *X_row = X + (row * stm->num_literals);
                 void *y_row = (void *)((uint8_t *)y + (row * stm->y_size * stm->y_element_size));
 
                 calculate_clause_output(stm, X_row, 0);
 
+                sum_votes(stm);
+
                 // Iterate over all clauses, not only active ones (1b)
                 // Calculate pseudo gradient - feedback to clause-class vote weight
                 for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-                    int16_t *clause_votes = stm->weights + (clause_id * stm->num_classes);
-            
-                    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-                        stm->votes[class_id] = (int32_t)clause_votes[class_id];  // sign-extend into int32
-                    }
-            
                     stm->calculate_feedback(stm, y_row, clause_id); // accumulate pseudo gradient
 
                     // Train Individual Automata
@@ -655,28 +652,37 @@ void stm_set_output_activation(
 }
 
 
-// --- Basic output_activation_pseudograd functions ---
+// Internal component of feedback functions below
+void stm_append_feedback(const struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive) {
+	uint8_t is_vote_positive = stm->weights[(clause_id * stm->num_classes) + class_id] >= 0;
+	if (is_vote_positive == is_class_positive) {
+		if (stm->clause_output[clause_id] == 1) {
+			stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 0] += 1;
+		}
+		else {
+			stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 1] += 1;
+		}
+	}
+	else if (stm->clause_output[clause_id] == 1) {
+		stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 2] += 1;
+	}
+}
+
+// --- calculate_feedback ---
+// Calculate clause-class feedback
 
 void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
     // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
     const uint32_t *label_ptr = (const uint32_t *)y;
     const uint32_t positive_class = *label_ptr;
+    uint32_t negative_class = 0;
 
-    int8_t *clause_feedback_positive = stm->feedback + ((clause_id * stm->num_classes + positive_class) * 3);
     int32_t votes_clipped_positive = clip(stm->votes[positive_class], (int32_t)stm->threshold);
     float update_probability_positive = ((float)votes_clipped_positive + (float)stm->threshold) / (float)(2 * stm->threshold);
-    if (stm->clause_output[clause_id] == 1) {
-        clause_feedback_positive[0] += (1.0 * rand()/RAND_MAX <= update_probability_positive);
-    }
-    else {
-        clause_feedback_positive[1] += (1.0 * rand()/RAND_MAX <= update_probability_positive);
-    }
 
-    if (stm->clause_output[clause_id] == 0) {
-        return;
+    if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+    	stm_append_feedback(stm, clause_id, positive_class, 1);
     }
-
-    uint32_t negative_class = 0;
 
     int32_t sum_votes_clipped_negative = 0;
     for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
@@ -684,6 +690,7 @@ void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *
             sum_votes_clipped_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
         }
     }
+    if (sum_votes_clipped_negative == 0) return;
     int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
     int32_t accumulated_votes = 0;
     for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
@@ -696,17 +703,72 @@ void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *
         }
     }
 
-    int8_t *clause_feedback_negative = stm->feedback + ((clause_id * stm->num_classes + negative_class) * 3);
     int32_t votes_clipped_negative = clip(stm->votes[negative_class], (int32_t)stm->threshold);
     float update_probability_negative = ((float)votes_clipped_negative + (float)stm->threshold) / (float)(2 * stm->threshold);
-    if (stm->clause_output[clause_id] == 1) {
-        clause_feedback_negative[2] += (1.0 * rand()/RAND_MAX <= update_probability_negative);
+
+    if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+    	stm_append_feedback(stm, clause_id, negative_class, 0);
     }
 }
 
 void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
-    fprintf(stderr, "stm_feedback_bin_vector not implemented\n");
-    exit(1);
+    const uint8_t *label_arr = (const uint8_t *)y;
+    uint32_t positive_class = 0;
+    uint32_t negative_class = 0;
+
+    int32_t sum_votes_clipped_positive = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (label_arr[class_id]) {
+			sum_votes_clipped_positive += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+		}
+	}
+	if (sum_votes_clipped_positive == 0) goto negative_feedback;
+	int32_t random_vote_positive = rand() % sum_votes_clipped_positive;
+	int32_t accumulated_votes_positive = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (label_arr[class_id]) {
+			accumulated_votes_positive += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+			if (accumulated_votes_positive >= random_vote_positive) {
+				positive_class = class_id;
+				break;
+			}
+		}
+	}
+
+	int32_t votes_clipped_positive = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+	float update_probability_positive = ((float)votes_clipped_positive + (float)stm->threshold) / (float)(2 * stm->threshold);
+
+	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+		stm_append_feedback(stm, clause_id, positive_class, 1);
+	}
+
+negative_feedback:
+
+    int32_t sum_votes_clipped_negative = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (!label_arr[class_id]) {
+			sum_votes_clipped_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+		}
+	}
+	if (sum_votes_clipped_negative == 0) return;
+	int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+	int32_t accumulated_votes_negative = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (!label_arr[class_id]) {
+			accumulated_votes_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+			if (accumulated_votes_negative >= random_vote_negative) {
+				negative_class = class_id;
+				break;
+			}
+		}
+	}
+
+	int32_t votes_clipped_negative = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+	float update_probability_negative = ((float)votes_clipped_negative + (float)stm->threshold) / (float)(2 * stm->threshold);
+
+	if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+		stm_append_feedback(stm, clause_id, negative_class, 0);
+	}
 }
 
 

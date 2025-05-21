@@ -186,7 +186,7 @@ void test_type_2_feedback(void) {
 
 void test_tsetlin_machine_run_all(void) {
     RUN_TEST(basic_inference);
-    // RUN_TEST(basic_training);
+    RUN_TEST(basic_training);
     RUN_TEST(test_calculate_clause_output);
     RUN_TEST(test_sum_votes);
     RUN_TEST(test_type_1a_feedback);
