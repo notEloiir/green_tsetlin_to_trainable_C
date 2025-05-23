@@ -65,6 +65,7 @@ uint8_t stm_y_eq_generic(const struct SparseTsetlinMachine *stm, const void *y, 
 // --- Tsetlin Machine ---
 
 void stm_initialize(struct SparseTsetlinMachine *stm);
+static inline void stm_free_state_llists(struct SparseTsetlinMachine *stm);
 
 // Translates automaton state to action - 0 or 1
 static inline uint8_t action(int8_t state, int8_t mid_state) {
@@ -106,16 +107,6 @@ struct SparseTsetlinMachine *stm_create(
     }
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
     	stm->ta_state[clause_id] = NULL;
-    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-        for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-			ta_state_insert(stm->ta_state + clause_id, curr_ptr, i, 0);
-			if (i == 0) {
-				curr_ptr = stm->ta_state[clause_id];
-				continue;
-			}
-			curr_ptr = curr_ptr->next;
-
-        }
     }
     
     stm->weights = (int16_t *)malloc(num_clauses * num_classes * sizeof(int16_t));  // shape: flat (num_clauses, num_classes)
@@ -219,24 +210,22 @@ struct SparseTsetlinMachine *stm_load_dense(
         fclose(file);
         return NULL;
     }
+
+	stm_free_state_llists(stm);
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
     	struct TAStateNode *prev_ptr = NULL;
-    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    	struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
 
         for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
         	if (action(flat_states[clause_id * stm->num_literals * 2 + i], stm->mid_state)) {
-				curr_ptr->ta_state = flat_states[clause_id * stm->num_literals * 2 + i];
-				prev_ptr = curr_ptr;
-				curr_ptr = curr_ptr->next;
-        	}
-        	else {
-        		ta_state_remove(stm->ta_state + clause_id, prev_ptr);
-            	if (prev_ptr == NULL) {
-            		curr_ptr = stm->ta_state[clause_id];
-            	}
-            	else {
-            		curr_ptr = prev_ptr->next;
-            	}
+        		ta_state_insert(head_ptr_addr, prev_ptr, i, flat_states[clause_id * stm->num_literals * 2 + i]);
+
+        		if (prev_ptr != NULL) {
+        			prev_ptr = prev_ptr->next;
+        		}
+        		else {
+        			prev_ptr = *head_ptr_addr;
+        		}
         	}
         }
     }
@@ -335,18 +324,22 @@ save_error:
 }
 
 
+static inline void stm_free_state_llists(struct SparseTsetlinMachine *stm) {
+	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
+		struct TAStateNode **head_ptr = stm->ta_state + clause_id;
+		while (*head_ptr != NULL) {
+			ta_state_remove(head_ptr, NULL);
+		}
+	}
+}
+
 // Free all allocated memory
 void stm_free(struct SparseTsetlinMachine *stm) {
     if (stm != NULL){
-        if (stm->ta_state != NULL) {
-        	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-				struct TAStateNode **head_ptr = stm->ta_state + clause_id;
-				while (*head_ptr != NULL) {
-					ta_state_remove(head_ptr, NULL);
-				}
-			}
-        	free(stm->ta_state);
-        }
+    	if (stm->ta_state != NULL) {
+			stm_free_state_llists(stm);
+			free(stm->ta_state);
+		}
         
         if (stm->weights != NULL) {
             free(stm->weights);
@@ -378,20 +371,20 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
 
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-		struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-        for (uint32_t literal_id = 0; literal_id < stm->num_literals; literal_id++) {
-            if (1.0 * rand()/RAND_MAX <= 0.5) {
-            	curr_ptr->ta_state = stm->mid_state - 1;
-    			curr_ptr = curr_ptr->next;
-            	curr_ptr->ta_state = stm->mid_state;
-    			curr_ptr = curr_ptr->next;
-            } else {
-            	curr_ptr->ta_state = stm->mid_state;
-    			curr_ptr = curr_ptr->next;
-            	curr_ptr->ta_state = stm->mid_state - 1;
-    			curr_ptr = curr_ptr->next;
-            }
-        }
+		struct TAStateNode *prev_ptr = NULL;
+		struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
+
+		for (uint32_t i = 0; i < stm->num_literals * 2; i += 2) {  // +=2 !
+			uint8_t is_negative = (1.0 * rand()/RAND_MAX <= 0.5);
+			ta_state_insert(head_ptr_addr, prev_ptr, i + is_negative, 0);
+
+			if (prev_ptr != NULL) {
+				prev_ptr = prev_ptr->next;
+			}
+			else {
+				prev_ptr = *head_ptr_addr;
+			}
+		}
     }
     
     // Init weights randomly to -1 or 1

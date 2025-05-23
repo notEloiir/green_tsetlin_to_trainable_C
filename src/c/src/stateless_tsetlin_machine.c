@@ -64,6 +64,7 @@ uint8_t sltm_y_eq_generic(const struct StatelessTsetlinMachine *sltm, const void
 // --- Tsetlin Machine ---
 
 void sltm_initialize(struct StatelessTsetlinMachine *sltm);
+inline static void sltm_free_state_llists(struct StatelessTsetlinMachine *sltm);
 
 // Allocate memory, fill in fields, calls sltm_initialize
 struct StatelessTsetlinMachine *sltm_create(
@@ -99,16 +100,6 @@ struct StatelessTsetlinMachine *sltm_create(
     }
     for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
     	sltm->ta_state[clause_id] = NULL;
-    	struct TANode *curr_ptr = sltm->ta_state[clause_id];
-        for (uint32_t i = 0; i < sltm->num_literals * 2; i++) {
-			ta_stateless_insert(sltm->ta_state + clause_id, curr_ptr, i);
-			if (i == 0) {
-				curr_ptr = sltm->ta_state[clause_id];
-				continue;
-			}
-			curr_ptr = curr_ptr->next;
-
-        }
     }
     
     sltm->weights = (int16_t *)malloc(num_clauses * num_classes * sizeof(int16_t));  // shape: flat (num_clauses, num_classes)
@@ -210,27 +201,26 @@ struct StatelessTsetlinMachine *sltm_load_dense(
         fclose(file);
         return NULL;
     }
-    for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
-    	struct TANode *prev_ptr = NULL;
-    	struct TANode *curr_ptr = sltm->ta_state[clause_id];
 
-        for (uint32_t i = 0; i < sltm->num_literals * 2; i++) {
-        	if (action(flat_states[clause_id * sltm->num_literals * 2 + i], sltm->mid_state)) {
-				prev_ptr = curr_ptr;
-				curr_ptr = curr_ptr->next;
-        	}
-        	else {
-        		ta_stateless_remove(sltm->ta_state + clause_id, prev_ptr);
-            	if (prev_ptr == NULL) {
-            		curr_ptr = sltm->ta_state[clause_id];
-            	}
-            	else {
-            		curr_ptr = prev_ptr->next;
-            	}
-        	}
-        }
-    }
-    free(flat_states);
+    sltm_free_state_llists(sltm);
+	for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
+		struct TANode *prev_ptr = NULL;
+		struct TANode **head_ptr_addr = sltm->ta_state + clause_id;
+
+		for (uint32_t i = 0; i < sltm->num_literals * 2; i++) {
+			if (action(flat_states[clause_id * sltm->num_literals * 2 + i], sltm->mid_state)) {
+				ta_stateless_insert(head_ptr_addr, prev_ptr, i);
+
+				if (prev_ptr != NULL) {
+					prev_ptr = prev_ptr->next;
+				}
+				else {
+					prev_ptr = *head_ptr_addr;
+				}
+			}
+		}
+	}
+	free(flat_states);
 
     fclose(file);
     return sltm;
@@ -320,16 +310,21 @@ save_error:
 }
 
 
+
+inline static void sltm_free_state_llists(struct StatelessTsetlinMachine *sltm) {
+	for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
+		struct TANode **head_ptr = sltm->ta_state + clause_id;
+		while (*head_ptr != NULL) {
+			ta_stateless_remove(head_ptr, NULL);
+		}
+	}
+}
+
 // Free all allocated memory
 void sltm_free(struct StatelessTsetlinMachine *sltm) {
     if (sltm != NULL){
         if (sltm->ta_state != NULL) {
-        	for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
-				struct TANode **head_ptr = sltm->ta_state + clause_id;
-				while (*head_ptr != NULL) {
-					ta_stateless_remove(head_ptr, NULL);
-				}
-			}
+        	sltm_free_state_llists(sltm);
         	free(sltm->ta_state);
         }
         
