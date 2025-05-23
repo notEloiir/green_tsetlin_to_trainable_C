@@ -9,8 +9,8 @@ struct TANode {
 	uint32_t ta_id;
     struct TANode *next;
 };
-void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t ta_id);
-void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev);
+void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t ta_id, struct TANode **result);
+void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev, struct TANode **result);
 
 struct StatelessTsetlinMachine {
     uint32_t num_classes;

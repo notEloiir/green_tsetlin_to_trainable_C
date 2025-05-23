@@ -24,12 +24,12 @@ int main() {
 
     struct TsetlinMachine *tm = tm_create(num_classes, threshold, num_literals, num_clauses,
         max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
-    // struct SparseTsetlinMachine *stm = stm_create(num_classes, threshold, num_literals, num_clauses,
-    //     max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
-    // if (tm == NULL || stm == NULL) {
-	// 	perror("tm_load failed");
-	// 	return 1;
-	// }
+	struct SparseTsetlinMachine *stm = stm_create(num_classes, threshold, num_literals, num_clauses,
+		max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
+	if (tm == NULL || stm == NULL) {
+		perror("tm_load failed");
+		return 1;
+	}
     
     // Load in data
 	uint32_t rows = 70000;
@@ -49,17 +49,17 @@ int main() {
     int32_t *y_test = y_data + 60000;
 
     // Train models
-    train_models(tm, NULL, x_train, y_train, 3000);
+    train_models(tm, stm, x_train, y_train, 1000);
 
     // Evaluate models
     printf("\nEvaluating models on train data\n");
-    evaluate_models(tm, NULL, NULL, x_train, y_train, 1000);
+    evaluate_models(tm, stm, NULL, x_train, y_train, 1000);
     printf("\nEvaluating models on test data\n");
-    evaluate_models(tm, NULL, NULL, x_test, y_test, 1000);
+    evaluate_models(tm, stm, NULL, x_test, y_test, 1000);
 
 	// Clean up
     tm_free(tm);
-    // stm_free(stm);
+    stm_free(stm);
     free(x_data);
     free(y_data);
     

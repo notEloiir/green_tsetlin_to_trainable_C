@@ -8,7 +8,7 @@
 #include "utility.h"
 
 
-void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state) {
+void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state, struct TAStateNode **result) {
 	struct TAStateNode *node = malloc(sizeof(struct TAStateNode));
 	if (node == NULL) {
 		perror("Memory allocation failed");
@@ -28,9 +28,13 @@ void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, ui
 	else {
 		prev->next = node;
 	}
+
+	if (result != NULL) {
+		*result = node;
+	}
 }
 
-void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev) {
+void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev, struct TAStateNode **result) {
 	if (*head_ptr == NULL) {
         fprintf(stderr, "Trying to remove from empty linked list\n");
         return;
@@ -49,6 +53,10 @@ void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev) {
 	else {
 		to_remove = prev->next;
 		prev->next = to_remove->next;
+	}
+
+	if (result != NULL) {
+		*result = to_remove->next;
 	}
 
 	free(to_remove);
@@ -218,14 +226,7 @@ struct SparseTsetlinMachine *stm_load_dense(
 
         for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
         	if (action(flat_states[clause_id * stm->num_literals * 2 + i], stm->mid_state)) {
-        		ta_state_insert(head_ptr_addr, prev_ptr, i, flat_states[clause_id * stm->num_literals * 2 + i]);
-
-        		if (prev_ptr != NULL) {
-        			prev_ptr = prev_ptr->next;
-        		}
-        		else {
-        			prev_ptr = *head_ptr_addr;
-        		}
+        		ta_state_insert(head_ptr_addr, prev_ptr, i, flat_states[clause_id * stm->num_literals * 2 + i], &prev_ptr);
         	}
         }
     }
@@ -328,7 +329,7 @@ static inline void stm_free_state_llists(struct SparseTsetlinMachine *stm) {
 	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
 		struct TAStateNode **head_ptr = stm->ta_state + clause_id;
 		while (*head_ptr != NULL) {
-			ta_state_remove(head_ptr, NULL);
+			ta_state_remove(head_ptr, NULL, NULL);
 		}
 	}
 }
@@ -376,14 +377,7 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
 
 		for (uint32_t i = 0; i < stm->num_literals * 2; i += 2) {  // +=2 !
 			uint8_t is_negative = (1.0 * rand()/RAND_MAX <= 0.5);
-			ta_state_insert(head_ptr_addr, prev_ptr, i + is_negative, 0);
-
-			if (prev_ptr != NULL) {
-				prev_ptr = prev_ptr->next;
-			}
-			else {
-				prev_ptr = *head_ptr_addr;
-			}
+			ta_state_insert(head_ptr_addr, prev_ptr, i + is_negative, 0, &prev_ptr);
 		}
     }
     
@@ -462,9 +456,20 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
     }
     
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		if (i % 2 != X[i / 2]) {
+				// Insert new TA with state 5
+				int8_t initial_state = min(5, feedback_strength);
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, initial_state, &prev_ptr);
+				curr_ptr = prev_ptr->next;
+    		}
+    		continue;
+    	}
+
         // X[i / 2] should equal action at ta_id==i
-        if (action(curr_ptr->ta_state, stm->mid_state) && curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
+        if (curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
             // Correct, reward
             curr_ptr->ta_state +=
 				min(stm->max_state - curr_ptr->ta_state, feedback_strength) *
@@ -474,7 +479,14 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
             curr_ptr->ta_state -=
 				min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
 				1.0*rand()/RAND_MAX <= stm->s_inv;
+
+            if (!action(curr_ptr->ta_state, stm->mid_state)) {
+            	// Remove TA
+            	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
+            }
         }
+
+        prev_ptr = curr_ptr;
         curr_ptr = curr_ptr->next;
     }
 }
@@ -490,10 +502,23 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t c
     }
 
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		continue;
+    	}
+
         curr_ptr->ta_state -=
 			min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
 			1.0*rand()/RAND_MAX <= stm->s_inv;
+
+        if (!action(curr_ptr->ta_state, stm->mid_state)) {
+        	// Remove TA
+        	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
+        	continue;
+        }
+
+        prev_ptr = curr_ptr;
         curr_ptr = curr_ptr->next;
     }
 }
@@ -513,10 +538,19 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X,
         stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
     struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        curr_ptr->ta_state +=
-			min(stm->max_state - curr_ptr->ta_state, feedback_strength) *
-			(0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		if (i % 2 == X[i / 2]) {
+				// Insert new TA with state 5
+				int8_t initial_state = min(5, feedback_strength);
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, initial_state, &prev_ptr);
+				curr_ptr = prev_ptr->next;
+    		}
+    		continue;
+    	}
+
+        prev_ptr = curr_ptr;
         curr_ptr = curr_ptr->next;
     }
 }

@@ -8,7 +8,7 @@
 #include "utility.h"
 
 
-void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t ta_id) {
+void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t ta_id, struct TANode **result) {
 	struct TANode *node = malloc(sizeof(struct TANode));
 	if (node == NULL) {
 		perror("Memory allocation failed");
@@ -27,9 +27,13 @@ void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t
 	else {
 		prev->next = node;
 	}
+
+	if (result != NULL) {
+		*result = node;
+	}
 }
 
-void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev) {
+void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev, struct TANode **result) {
 	if (*head_ptr == NULL) {
         fprintf(stderr, "Trying to remove from empty linked list\n");
         return;
@@ -48,6 +52,10 @@ void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev) {
 	else {
 		to_remove = prev->next;
 		prev->next = to_remove->next;
+	}
+
+	if (result != NULL) {
+		*result = to_remove->next;
 	}
 
 	free(to_remove);
@@ -209,14 +217,7 @@ struct StatelessTsetlinMachine *sltm_load_dense(
 
 		for (uint32_t i = 0; i < sltm->num_literals * 2; i++) {
 			if (action(flat_states[clause_id * sltm->num_literals * 2 + i], sltm->mid_state)) {
-				ta_stateless_insert(head_ptr_addr, prev_ptr, i);
-
-				if (prev_ptr != NULL) {
-					prev_ptr = prev_ptr->next;
-				}
-				else {
-					prev_ptr = *head_ptr_addr;
-				}
+				ta_stateless_insert(head_ptr_addr, prev_ptr, i, &prev_ptr);
 			}
 		}
 	}
@@ -315,7 +316,7 @@ inline static void sltm_free_state_llists(struct StatelessTsetlinMachine *sltm) 
 	for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
 		struct TANode **head_ptr = sltm->ta_state + clause_id;
 		while (*head_ptr != NULL) {
-			ta_stateless_remove(head_ptr, NULL);
+			ta_stateless_remove(head_ptr, NULL, NULL);
 		}
 	}
 }

@@ -10,8 +10,8 @@ struct TAStateNode {
     int8_t ta_state;
     struct TAStateNode *next;
 };
-void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state);
-void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev);
+void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state, struct TAStateNode **result);
+void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev, struct TAStateNode **result);
 
 struct SparseTsetlinMachine {
     uint32_t num_classes;
