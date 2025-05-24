@@ -90,6 +90,9 @@ void tm_set_output_activation(
 void tm_feedback_class_idx(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id);  // y_size = 1
 void tm_feedback_bin_vector(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id);  // y_size = tm->num_classes
 
+// Internal component of feedback functions, included in header if you want to create your own
+void tm_append_feedback(const struct TsetlinMachine *tm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive);
+
 void tm_set_calculate_feedback(
     struct TsetlinMachine *tm,
     void (*calculate_feedback)(const struct TsetlinMachine *tm, const void *y, uint32_t clause_id)

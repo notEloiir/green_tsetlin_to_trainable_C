@@ -103,7 +103,7 @@ void train_models(
     if (tm != NULL) {
         printf("Training Tsetlin Machine model\n");
         start_clock = clock();
-        tm_train(tm, x_data, y_data, rows, 10, 2);
+        tm_train(tm, x_data, y_data, rows, 1, 1);
         end_clock = clock();
         printf("Tsetlin Machine time: %f[s]\n", ((double) (end_clock - start_clock)) / CLOCKS_PER_SEC);
     }
@@ -111,7 +111,7 @@ void train_models(
     if (stm != NULL) {
         printf("Training Sparse Tsetlin Machine model\n");
         start_clock = clock();
-        stm_train(stm, x_data, y_data, rows, 10, 2);
+        stm_train(stm, x_data, y_data, rows, 1, 1);
         end_clock = clock();
         printf("Sparse Tsetlin Machine time: %f[s]\n", ((double) (end_clock - start_clock)) / CLOCKS_PER_SEC);
     }
