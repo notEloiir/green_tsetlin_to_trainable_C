@@ -707,7 +707,7 @@ void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *
     uint32_t negative_class = 0;
 
     int32_t votes_clipped_positive = clip(stm->votes[positive_class], (int32_t)stm->threshold);
-    float update_probability_positive = ((float)votes_clipped_positive + (float)stm->threshold) / (float)(2 * stm->threshold);
+	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
 
     if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
     	stm_append_feedback(stm, clause_id, positive_class, 1);
@@ -765,7 +765,7 @@ void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void 
 	}
 
 	int32_t votes_clipped_positive = clip(stm->votes[negative_class], (int32_t)stm->threshold);
-	float update_probability_positive = ((float)votes_clipped_positive + (float)stm->threshold) / (float)(2 * stm->threshold);
+	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
 
 	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
 		stm_append_feedback(stm, clause_id, positive_class, 1);

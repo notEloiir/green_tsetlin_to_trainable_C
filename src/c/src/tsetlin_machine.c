@@ -591,7 +591,7 @@ void tm_feedback_class_idx(const struct TsetlinMachine *tm, const void *y, uint3
     uint32_t negative_class = 0;
 
     int32_t votes_clipped_positive = clip(tm->votes[positive_class], (int32_t)tm->threshold);
-    float update_probability_positive = ((float)votes_clipped_positive + (float)tm->threshold) / (float)(2 * tm->threshold);
+    float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
     if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
     	tm_append_feedback(tm, clause_id, positive_class, 1);
@@ -649,7 +649,7 @@ void tm_feedback_bin_vector(const struct TsetlinMachine *tm, const void *y, uint
 	}
 
 	int32_t votes_clipped_positive = clip(tm->votes[negative_class], (int32_t)tm->threshold);
-	float update_probability_positive = ((float)votes_clipped_positive + (float)tm->threshold) / (float)(2 * tm->threshold);
+	float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
 	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
 		tm_append_feedback(tm, clause_id, positive_class, 1);
