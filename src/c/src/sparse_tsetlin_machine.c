@@ -368,6 +368,7 @@ void stm_free(struct SparseTsetlinMachine *stm) {
 // Initialize values
 void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->mid_state = (stm->max_state + stm->min_state) / 2;
+    stm->sparse_min_state = stm->mid_state - 5;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
 
@@ -375,9 +376,8 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
 		struct TAStateNode *prev_ptr = NULL;
 		struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
 
-		for (uint32_t i = 0; i < stm->num_literals * 2; i += 2) {  // +=2 !
-			uint8_t is_negative = (1.0 * rand()/RAND_MAX <= 0.5);
-			ta_state_insert(head_ptr_addr, prev_ptr, i + is_negative, 0, &prev_ptr);
+		for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+			ta_state_insert(head_ptr_addr, prev_ptr, i, (-1.0 * rand()/RAND_MAX <= 0.5), &prev_ptr);
 		}
     }
     
@@ -439,7 +439,7 @@ static inline void sum_votes(struct SparseTsetlinMachine *stm) {
 // Clause at clause_id voted correctly for class at class_id
 
 // Type a - Clause is active for literals X (clause_output == 1)
-static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
+void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
     // float s_min1_inv = (stm->s - 1.0f) / stm->s;
 
@@ -460,9 +460,8 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
     	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
     		if (i % 2 != X[i / 2]) {
-				// Insert new TA with state 5
-				int8_t initial_state = min(5, feedback_strength);
-				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, initial_state, &prev_ptr);
+				// Insert new TA with state stm->sparse_min_state
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, stm->sparse_min_state, &prev_ptr);
 				curr_ptr = prev_ptr->next;
     		}
     		continue;
@@ -480,9 +479,10 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
 				min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
 				1.0*rand()/RAND_MAX <= stm->s_inv;
 
-            if (!action(curr_ptr->ta_state, stm->mid_state)) {
+            if (curr_ptr->ta_state < stm->sparse_min_state) {
             	// Remove TA
             	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
+                continue;
             }
         }
 
@@ -493,7 +493,7 @@ static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X
 
 
 // Type b - Clause is inactive for literals X (clause_output == 0)
-static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id) {
+void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
 
     uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
@@ -512,7 +512,7 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t c
 			min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
 			1.0*rand()/RAND_MAX <= stm->s_inv;
 
-        if (!action(curr_ptr->ta_state, stm->mid_state)) {
+        if (curr_ptr->ta_state < stm->sparse_min_state) {
         	// Remove TA
         	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
         	continue;
@@ -528,7 +528,7 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t c
 // Clause at clause_id voted incorrectly for class at class_id
 // && Clause is active for literals X (clause_output == 1)
 
-static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
+void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
     if (!feedback_strength) {
         return;
@@ -542,9 +542,8 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X,
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
     	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
     		if (i % 2 == X[i / 2]) {
-				// Insert new TA with state 5
-				int8_t initial_state = min(5, feedback_strength);
-				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, initial_state, &prev_ptr);
+				// Insert new TA with state stm->sparse_min_state
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, stm->sparse_min_state, &prev_ptr);
 				curr_ptr = prev_ptr->next;
     		}
     		continue;
