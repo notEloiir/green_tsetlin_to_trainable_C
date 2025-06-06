@@ -1,0 +1,56 @@
+// IDL file for Tsetlin Machine
+// 
+// The model is based on the `green_tsetlin` library
+// (https://github.com/ooki/green_tsetlin).
+//
+// The model state in `green_tsetlin` is represented as:
+// - number of classes
+// - threshold
+// - number of literals
+// - number of clauses
+// - maximum state
+// - minimum state
+// - boost true positive feedback
+// - learning sensitivity (s)
+//
+// - weights
+// - clauses
+//
+// The model does not include:
+// - names of literals
+//
+// In the future, we may consider adding:
+// - graph structure (operators + dataflow)
+// - versioning and metadata
+
+namespace TsetlinMachine;
+
+table Parameters {
+  threshold:  uint;  // tsetlin automaton threshold
+  n_literals: uint;  // total number of literals
+  n_clauses:  uint;  // total number of clauses
+  n_classes:  uint;  // number of output classes
+  max_state:  byte;  // maximum state for automaton
+  min_state:  byte;  // minimum state for automaton
+  boost_tp:   ubyte; // boost true positive feedback
+  learn_s:    float; // learning sensitivity (s)
+} // https://flatbuffers.dev/schema/#scalars
+
+table ClauseWeightsTensor {
+  weights: [short]; // clause weights
+  shape:   [uint];  // dimensions e.g. [n_clauses, n_classes]
+}
+
+table AutomatonStatesTensor {
+  states: [byte]; // automaton states
+  shape:  [uint]; // dimensions e.g. [n_clauses, n_literals, 2]
+}
+
+table Model {
+  params:           Parameters            (required); // model hyperparameters
+  automaton_states: AutomatonStatesTensor (required); // automaton states
+  clause_weights:   ClauseWeightsTensor   (required); // clause weights
+  literal_names:    [string];                         // names of literals
+}
+
+root_type Model;
