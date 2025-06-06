@@ -10,15 +10,15 @@ struct TAStateNode {
     int8_t ta_state;
     struct TAStateNode *next;
 };
-void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state);
-void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev);
+void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state, struct TAStateNode **result);
+void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev, struct TAStateNode **result);
 
 struct SparseTsetlinMachine {
     uint32_t num_classes;
     uint32_t threshold;
     uint32_t num_literals;
     uint32_t num_clauses;
-    int8_t max_state, min_state;
+    int8_t max_state, min_state, sparse_min_state;
     uint8_t boost_true_positive_feedback;
     float s;
 
@@ -96,6 +96,9 @@ void stm_set_output_activation(
 
 void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id);  // y_size = 1
 void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id);  // y_size = tm->num_classes
+
+// Internal component of feedback functions, included in header if you want to create your own
+void stm_append_feedback(const struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive);
 
 void stm_set_calculate_feedback(
     struct SparseTsetlinMachine *stm,

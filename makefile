@@ -24,7 +24,7 @@ model_size_demo: $(C_SRC) demos/model_size/c/demo.c
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
-tests: $(C_TESTS_SRC)
+tests_bin: $(C_TESTS_SRC)
 	mkdir -p $(BUILD_DIR)
 	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
 
@@ -52,8 +52,8 @@ run_model_size_demo_c: model_size_demo
 
 run_tests: run_tests_c
 
-run_tests_c: tests
-	./$(BUILD_DIR)/tests
+run_tests_c: tests_bin
+	./$(BUILD_DIR)/tests_bin
 
 # === Cleanup ===
 clean:

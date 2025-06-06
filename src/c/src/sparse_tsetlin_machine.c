@@ -8,7 +8,7 @@
 #include "utility.h"
 
 
-void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state) {
+void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state, struct TAStateNode **result) {
 	struct TAStateNode *node = malloc(sizeof(struct TAStateNode));
 	if (node == NULL) {
 		perror("Memory allocation failed");
@@ -28,9 +28,13 @@ void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, ui
 	else {
 		prev->next = node;
 	}
+
+	if (result != NULL) {
+		*result = node;
+	}
 }
 
-void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev) {
+void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev, struct TAStateNode **result) {
 	if (*head_ptr == NULL) {
         fprintf(stderr, "Trying to remove from empty linked list\n");
         return;
@@ -51,6 +55,10 @@ void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev) {
 		prev->next = to_remove->next;
 	}
 
+	if (result != NULL) {
+		*result = to_remove->next;
+	}
+
 	free(to_remove);
 }
 
@@ -65,6 +73,7 @@ uint8_t stm_y_eq_generic(const struct SparseTsetlinMachine *stm, const void *y, 
 // --- Tsetlin Machine ---
 
 void stm_initialize(struct SparseTsetlinMachine *stm);
+static inline void stm_free_state_llists(struct SparseTsetlinMachine *stm);
 
 // Translates automaton state to action - 0 or 1
 static inline uint8_t action(int8_t state, int8_t mid_state) {
@@ -106,16 +115,6 @@ struct SparseTsetlinMachine *stm_create(
     }
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
     	stm->ta_state[clause_id] = NULL;
-    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-        for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-			ta_state_insert(stm->ta_state + clause_id, curr_ptr, i, 0);
-			if (i == 0) {
-				curr_ptr = stm->ta_state[clause_id];
-				continue;
-			}
-			curr_ptr = curr_ptr->next;
-
-        }
     }
     
     stm->weights = (int16_t *)malloc(num_clauses * num_classes * sizeof(int16_t));  // shape: flat (num_clauses, num_classes)
@@ -219,24 +218,15 @@ struct SparseTsetlinMachine *stm_load_dense(
         fclose(file);
         return NULL;
     }
+
+	stm_free_state_llists(stm);
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
     	struct TAStateNode *prev_ptr = NULL;
-    	struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    	struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
 
         for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
         	if (action(flat_states[clause_id * stm->num_literals * 2 + i], stm->mid_state)) {
-				curr_ptr->ta_state = flat_states[clause_id * stm->num_literals * 2 + i];
-				prev_ptr = curr_ptr;
-				curr_ptr = curr_ptr->next;
-        	}
-        	else {
-        		ta_state_remove(stm->ta_state + clause_id, prev_ptr);
-            	if (prev_ptr == NULL) {
-            		curr_ptr = stm->ta_state[clause_id];
-            	}
-            	else {
-            		curr_ptr = prev_ptr->next;
-            	}
+        		ta_state_insert(head_ptr_addr, prev_ptr, i, flat_states[clause_id * stm->num_literals * 2 + i], &prev_ptr);
         	}
         }
     }
@@ -335,18 +325,22 @@ save_error:
 }
 
 
+static inline void stm_free_state_llists(struct SparseTsetlinMachine *stm) {
+	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
+		struct TAStateNode **head_ptr = stm->ta_state + clause_id;
+		while (*head_ptr != NULL) {
+			ta_state_remove(head_ptr, NULL, NULL);
+		}
+	}
+}
+
 // Free all allocated memory
 void stm_free(struct SparseTsetlinMachine *stm) {
     if (stm != NULL){
-        if (stm->ta_state != NULL) {
-        	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-				struct TAStateNode **head_ptr = stm->ta_state + clause_id;
-				while (*head_ptr != NULL) {
-					ta_state_remove(head_ptr, NULL);
-				}
-			}
-        	free(stm->ta_state);
-        }
+    	if (stm->ta_state != NULL) {
+			stm_free_state_llists(stm);
+			free(stm->ta_state);
+		}
         
         if (stm->weights != NULL) {
             free(stm->weights);
@@ -374,24 +368,17 @@ void stm_free(struct SparseTsetlinMachine *stm) {
 // Initialize values
 void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->mid_state = (stm->max_state + stm->min_state) / 2;
+    stm->sparse_min_state = stm->mid_state - 5;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
 
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-		struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-        for (uint32_t literal_id = 0; literal_id < stm->num_literals; literal_id++) {
-            if (1.0 * rand()/RAND_MAX <= 0.5) {
-            	curr_ptr->ta_state = stm->mid_state - 1;
-    			curr_ptr = curr_ptr->next;
-            	curr_ptr->ta_state = stm->mid_state;
-    			curr_ptr = curr_ptr->next;
-            } else {
-            	curr_ptr->ta_state = stm->mid_state;
-    			curr_ptr = curr_ptr->next;
-            	curr_ptr->ta_state = stm->mid_state - 1;
-    			curr_ptr = curr_ptr->next;
-            }
-        }
+		struct TAStateNode *prev_ptr = NULL;
+		struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
+
+		for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+			ta_state_insert(head_ptr_addr, prev_ptr, i, (-1.0 * rand()/RAND_MAX <= 0.5), &prev_ptr);
+		}
     }
     
     // Init weights randomly to -1 or 1
@@ -404,7 +391,7 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
 // Output is stored an internal output array clause_output
-static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uint8_t *X) {
+static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uint8_t *X, uint8_t skip_empty) {
     // For each clause, check if it is "active" - all necessary literals have the right value
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         stm->clause_output[clause_id] = 1;
@@ -421,7 +408,7 @@ static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, uin
 			}
 			curr_ptr = curr_ptr->next;
 		}
-		if (empty_clause) {
+		if (empty_clause && skip_empty) {
 			stm->clause_output[clause_id] = 0;
 		}
     }
@@ -452,63 +439,87 @@ static inline void sum_votes(struct SparseTsetlinMachine *stm) {
 // Clause at clause_id voted correctly for class at class_id
 
 // Type a - Clause is active for literals X (clause_output == 1)
-static inline void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X) {
+void type_1a_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
     // float s_min1_inv = (stm->s - 1.0f) / stm->s;
 
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 0];
-            if (!feedback_strength) {
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 0];
+    if (!feedback_strength) {
+        return;
+    }
+
+    if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
+        stm->weights[clause_id * stm->num_classes + class_id] += min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
+    }
+    else {
+        stm->weights[clause_id * stm->num_classes + class_id] -= min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
+    }
+    
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		if (i % 2 != X[i / 2]) {
+				// Insert new TA with state stm->sparse_min_state
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, stm->sparse_min_state, &prev_ptr);
+				curr_ptr = prev_ptr->next;
+    		}
+    		continue;
+    	}
+
+        // X[i / 2] should equal action at ta_id==i
+        if (curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
+            // Correct, reward
+            curr_ptr->ta_state +=
+				min(stm->max_state - curr_ptr->ta_state, feedback_strength) *
+				(stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
+        }
+        else {
+            curr_ptr->ta_state -=
+				min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
+				1.0*rand()/RAND_MAX <= stm->s_inv;
+
+            if (curr_ptr->ta_state < stm->sparse_min_state) {
+            	// Remove TA
+            	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
                 continue;
             }
-
-            if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
-            	uint8_t delta = min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
-				stm->weights[clause_id * stm->num_classes + class_id] += delta;
-			}
-			else {
-				uint8_t delta = min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
-				stm->weights[clause_id * stm->num_classes + class_id] += delta;
-			}
-            
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-            for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-            	// X[i / 2] should equal action at ta_id==i
-            	if (action(curr_ptr->ta_state, stm->mid_state) && curr_ptr->ta_id % 2 != X[curr_ptr->ta_id / 2]) {
-					// Correct, reward
-            		uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-            		curr_ptr->ta_state += delta * (stm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= stm->s_min1_inv);
-				}
-            	else {
-            		uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-            		curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
-            	}
-            	curr_ptr = curr_ptr->next;
-            }
         }
+
+        prev_ptr = curr_ptr;
+        curr_ptr = curr_ptr->next;
     }
 }
 
 
 // Type b - Clause is inactive for literals X (clause_output == 0)
-static inline void type_1b_feedback(struct SparseTsetlinMachine *stm) {
+void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
 
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
-            if (!feedback_strength) {
-                continue;
-            }
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 1];
+    if (!feedback_strength) {
+        return;
+    }
 
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-            for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        		uint8_t delta = min(-(stm->min_state - curr_ptr->ta_state), feedback_strength);
-        		curr_ptr->ta_state -= delta * 1.0*rand()/RAND_MAX <= stm->s_inv;
-            	curr_ptr = curr_ptr->next;
-            }
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		continue;
+    	}
+
+        curr_ptr->ta_state -=
+			min(-(stm->min_state - curr_ptr->ta_state), feedback_strength) *
+			1.0*rand()/RAND_MAX <= stm->s_inv;
+
+        if (curr_ptr->ta_state < stm->sparse_min_state) {
+        	// Remove TA
+        	ta_state_remove(stm->ta_state + clause_id, prev_ptr, &curr_ptr);
+        	continue;
         }
+
+        prev_ptr = curr_ptr;
+        curr_ptr = curr_ptr->next;
     }
 }
 
@@ -517,24 +528,29 @@ static inline void type_1b_feedback(struct SparseTsetlinMachine *stm) {
 // Clause at clause_id voted incorrectly for class at class_id
 // && Clause is active for literals X (clause_output == 1)
 
-static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X) {
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-        for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-            uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
-            if (!feedback_strength) {
-                continue;
-            }
+void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X, uint32_t clause_id, uint32_t class_id) {
+    uint8_t feedback_strength = stm->feedback[(clause_id * stm->num_classes + class_id) * 3 + 2];
+    if (!feedback_strength) {
+        return;
+    }
 
-            stm->weights[clause_id * stm->num_classes + class_id] +=
-                stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
+    stm->weights[clause_id * stm->num_classes + class_id] +=
+        stm->weights[clause_id * stm->num_classes + class_id] >= 0 ? -feedback_strength : feedback_strength;
 
-            struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
-			for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        		uint8_t delta = min(stm->max_state - curr_ptr->ta_state, feedback_strength);
-        		curr_ptr->ta_state += delta * (0 == action(curr_ptr->ta_state, stm->mid_state) && 0 == X[i / 2]);
-            	curr_ptr = curr_ptr->next;
-			}
-        }
+    struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+    struct TAStateNode *prev_ptr = NULL;
+    for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	if (curr_ptr == NULL || curr_ptr->ta_id != i) {
+    		if (i % 2 == X[i / 2]) {
+				// Insert new TA with state stm->sparse_min_state
+				ta_state_insert(stm->ta_state + clause_id, prev_ptr, i, stm->sparse_min_state, &prev_ptr);
+				curr_ptr = prev_ptr->next;
+    		}
+    		continue;
+    	}
+
+        prev_ptr = curr_ptr;
+        curr_ptr = curr_ptr->next;
     }
 }
 
@@ -542,35 +558,34 @@ static inline void type_2_feedback(struct SparseTsetlinMachine *stm, uint8_t *X)
 void stm_train(struct SparseTsetlinMachine *stm, uint8_t *X, void *y, uint32_t rows, uint32_t batch_size, uint32_t epochs) {
     for (uint32_t epoch = 0; epoch < epochs; epoch++) {
         for (uint32_t batch = 0; batch < rows / batch_size; batch++) {
-            memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3);
+            // memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
 
             uint32_t start_idx, stop_idx;
             start_idx = batch * batch_size;
             stop_idx = (((batch + 1) * batch_size) > rows) ? rows : (batch + 1) * batch_size;
 
             for (uint32_t row = start_idx; row < stop_idx; row++) {
+            	memset(stm->feedback, 0, stm->num_clauses * stm->num_classes * 3 * sizeof(int8_t));
                 uint8_t *X_row = X + (row * stm->num_literals);
                 void *y_row = (void *)((uint8_t *)y + (row * stm->y_size * stm->y_element_size));
 
-                calculate_clause_output(stm, X_row);
+                calculate_clause_output(stm, X_row, 0);
+
+                sum_votes(stm);
 
                 // Iterate over all clauses, not only active ones (1b)
                 // Calculate pseudo gradient - feedback to clause-class vote weight
                 for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-                    int16_t *clause_votes = stm->weights + (clause_id * stm->num_classes);
-            
-                    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-                        stm->votes[class_id] = (int32_t)clause_votes[class_id];  // sign-extend into int32
-                    }
-            
                     stm->calculate_feedback(stm, y_row, clause_id); // accumulate pseudo gradient
+
+                    // Train Individual Automata
+                    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+                        type_1a_feedback(stm, X_row, clause_id, class_id);
+                        type_1b_feedback(stm, clause_id, class_id);
+                        type_2_feedback(stm, X_row, clause_id, class_id);
+                    }
                 }
             }
-
-            // Train Individual Automata
-            type_1a_feedback(stm, X);
-            type_1b_feedback(stm);
-            type_2_feedback(stm, X);
         }
     }
 }
@@ -584,7 +599,7 @@ void stm_predict(struct SparseTsetlinMachine *stm, uint8_t *X, void *y_pred, uin
         void *y_pred_row = (void *)(((uint8_t *)y_pred) + (row * stm->y_size * stm->y_element_size));
 
         // Calculate clause output
-        calculate_clause_output(stm, X_row);
+        calculate_clause_output(stm, X_row, 1);
 
         // Sum up clause votes for each class
         sum_votes(stm);
@@ -665,56 +680,123 @@ void stm_set_output_activation(
 }
 
 
-// --- Basic output_activation_pseudograd functions ---
+// Internal component of feedback functions below
+void stm_append_feedback(const struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive) {
+	uint8_t is_vote_positive = stm->weights[(clause_id * stm->num_classes) + class_id] >= 0;
+	if (is_vote_positive == is_class_positive) {
+		if (stm->clause_output[clause_id] == 1) {
+			stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 0] += 1;
+		}
+		else {
+			stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 1] += 1;
+		}
+	}
+	else if (stm->clause_output[clause_id] == 1) {
+		stm->feedback[((clause_id * stm->num_classes + class_id) * 3) + 2] += 1;
+	}
+}
+
+// --- calculate_feedback ---
+// Calculate clause-class feedback
 
 void stm_feedback_class_idx(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
-    const uint32_t *label = (const uint32_t *)y;
-
     // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(stm->votes[class_id], (int32_t)stm->threshold);
-        float update_probability = ((float)votes_clipped + (float)stm->threshold) / (float)(2 * stm->threshold);
-        int8_t *clause_feedback = stm->feedback + ((clause_id * stm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+    const uint32_t *label_ptr = (const uint32_t *)y;
+    const uint32_t positive_class = *label_ptr;
+    uint32_t negative_class = 0;
 
-        if (class_id == *label) {
-            // Correct vote
-            if (stm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
+    int32_t votes_clipped_positive = clip(stm->votes[positive_class], (int32_t)stm->threshold);
+	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
+
+    if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+    	stm_append_feedback(stm, clause_id, positive_class, 1);
+    }
+
+    int32_t sum_votes_clipped_negative = 0;
+    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+        if (class_id != positive_class) {
+            sum_votes_clipped_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+        }
+    }
+    if (sum_votes_clipped_negative == 0) return;
+    int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+    int32_t accumulated_votes = 0;
+    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+        if (class_id != positive_class) {
+            accumulated_votes += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+            if (accumulated_votes >= random_vote_negative) {
+                negative_class = class_id;
+                break;
             }
         }
-        else if (stm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
+    }
+
+    int32_t votes_clipped_negative = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+    float update_probability_negative = ((float)votes_clipped_negative + (float)stm->threshold) / (float)(2 * stm->threshold);
+
+    if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+    	stm_append_feedback(stm, clause_id, negative_class, 0);
     }
 }
 
 void stm_feedback_bin_vector(const struct SparseTsetlinMachine *stm, const void *y, uint32_t clause_id) {
-    uint8_t *y_bin_vec = (uint8_t *)y;
+    const uint8_t *label_arr = (const uint8_t *)y;
+    uint32_t positive_class = 0;
+    uint32_t negative_class = 0;
 
-    // Correct votes gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-        int32_t votes_clipped = clip(stm->votes[class_id], (int32_t)stm->threshold);
-        float update_probability = ((float)votes_clipped + (float)stm->threshold) / (float)(2 * stm->threshold);
-        int8_t *clause_feedback = stm->feedback + ((clause_id * stm->num_classes + class_id) * 3);
-        uint8_t feedback_strength = (1.0 * rand()/RAND_MAX >= update_probability);
+    int32_t sum_votes_clipped_positive = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (label_arr[class_id]) {
+			sum_votes_clipped_positive += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+		}
+	}
+	if (sum_votes_clipped_positive == 0) goto negative_feedback;
+	int32_t random_vote_positive = rand() % sum_votes_clipped_positive;
+	int32_t accumulated_votes_positive = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (label_arr[class_id]) {
+			accumulated_votes_positive += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+			if (accumulated_votes_positive >= random_vote_positive) {
+				positive_class = class_id;
+				break;
+			}
+		}
+	}
 
-        if ((stm->votes[class_id] > stm->mid_state) == y_bin_vec[class_id]) {
-            // Correct vote
-            if (stm->clause_output[clause_id] == 1) {
-                clause_feedback[0] += feedback_strength;
-            }
-            else {
-                clause_feedback[1] += feedback_strength;
-            }
-        }
-        else if (stm->clause_output[clause_id] == 1) {
-            clause_feedback[2] += feedback_strength;
-        }
-    }
+	int32_t votes_clipped_positive = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
+
+	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+		stm_append_feedback(stm, clause_id, positive_class, 1);
+	}
+
+negative_feedback:
+
+    int32_t sum_votes_clipped_negative = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (!label_arr[class_id]) {
+			sum_votes_clipped_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+		}
+	}
+	if (sum_votes_clipped_negative == 0) return;
+	int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+	int32_t accumulated_votes_negative = 0;
+	for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
+		if (!label_arr[class_id]) {
+			accumulated_votes_negative += clip(stm->votes[class_id], (int32_t)stm->threshold) + (int32_t)stm->threshold;
+			if (accumulated_votes_negative >= random_vote_negative) {
+				negative_class = class_id;
+				break;
+			}
+		}
+	}
+
+	int32_t votes_clipped_negative = clip(stm->votes[negative_class], (int32_t)stm->threshold);
+	float update_probability_negative = ((float)votes_clipped_negative + (float)stm->threshold) / (float)(2 * stm->threshold);
+
+	if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+		stm_append_feedback(stm, clause_id, negative_class, 0);
+	}
 }
 
 
