@@ -4,6 +4,7 @@
 #include <string.h>
 #include <limits.h>
 
+#include "flatbuffers/tsetlin_machine_builder.h"
 #include "tsetlin_machine.h"
 #include "utility.h"
 
@@ -231,6 +232,119 @@ void tm_save(struct TsetlinMachine *tm, const char *filename) {
 save_error:
     fclose(file);
     fprintf(stderr, "tm_save aborted, file %s may be incomplete\n", filename);
+}
+
+// Load Tsetlin Machine from a flatbuffers file
+struct TsetlinMachine *tm_load_fbs(
+    const char *filename, uint32_t y_size, uint32_t y_element_size
+) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Error opening file");
+        return NULL;
+    }
+    
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    // Read the file into a buffer
+    uint8_t *buffer = (uint8_t *)malloc(file_size);
+    if (!buffer) {
+        perror("Buffer allocation failed");
+        fclose(file);
+        return NULL;
+    }
+    
+    size_t bytes_read = fread(buffer, 1, file_size, file);
+    fclose(file);
+    
+    if (bytes_read != file_size) {
+        fprintf(stderr, "Failed to read the entire file\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    uint32_t threshold, num_literals, num_clauses, num_classes;
+    int8_t max_state, min_state;
+    uint8_t boost_true_positive_feedback;
+    float s;
+    
+    // Parse the flatbuffers model
+    TsetlinMachine_Model_table_t model = TsetlinMachine_Model_as_root(buffer);
+    if (!model) {
+        fprintf(stderr, "Failed to parse flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    // Extract parameters
+    TsetlinMachine_Parameters_table_t params = TsetlinMachine_Model_params(model);
+    if (!params) {
+        fprintf(stderr, "Failed to get parameters from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+
+    // Extract weights
+    TsetlinMachine_ClauseWeightsTensor_table_t weights = TsetlinMachine_Model_clause_weights(model);
+    if (!weights) {
+        fprintf(stderr, "Failed to get weights from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+
+    // Extract states
+    TsetlinMachine_AutomatonStatesTensor_table_t states = TsetlinMachine_Model_automaton_states(model);
+    if (!states) {
+        fprintf(stderr, "Failed to get states from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+    
+
+    threshold = TsetlinMachine_Parameters_threshold(params);
+    num_literals = TsetlinMachine_Parameters_n_literals(params);
+    num_clauses = TsetlinMachine_Parameters_n_clauses(params);
+    num_classes = TsetlinMachine_Parameters_n_classes(params);
+    max_state = TsetlinMachine_Parameters_max_state(params);
+    min_state = TsetlinMachine_Parameters_min_state(params);
+    boost_true_positive_feedback = TsetlinMachine_Parameters_boost_tp(params);
+    s = TsetlinMachine_Parameters_learn_s(params);
+
+    struct TsetlinMachine *tm = tm_create(
+        num_classes, threshold, num_literals, num_clauses,
+        max_state, min_state, boost_true_positive_feedback,
+        y_size, y_element_size, s
+    );
+    if (!tm) {
+        fprintf(stderr, "tm_create failed\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    // Copy weights data from flatbuffers
+    flatbuffers_int16_vec_t weights_vec = TsetlinMachine_ClauseWeightsTensor_weights(weights);
+    size_t weights_len = flatbuffers_int16_vec_len(weights_vec);
+    for (size_t i = 0; i < weights_len; i++) {
+        tm->weights[i] = flatbuffers_int16_vec_at(weights_vec, i);
+    }
+    
+    // Copy states data from flatbuffers
+    flatbuffers_int8_vec_t states_vec = TsetlinMachine_AutomatonStatesTensor_states(states);
+    size_t states_len = flatbuffers_int8_vec_len(states_vec);
+    for (size_t i = 0; i < states_len; i++) {
+        tm->ta_state[i] = flatbuffers_int8_vec_at(states_vec, i);
+    }
+    
+    free(buffer);
+    return tm;
+}
+
+// Save Tsetlin Machine to a flatbuffers file
+void tm_save_fbs(struct TsetlinMachine *tm, const char *filename) {
+    // TODO
 }
 
 

@@ -11,7 +11,9 @@ int main() {
     srand(42);
 
     const char *file_path = "data/models/mnist_tm.bin";
-    struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
+    const char *file_path_fbs = "data/models/mnist_tm.fbs";
+    struct TsetlinMachine *tm = tm_load_fbs(file_path_fbs, 1, sizeof(int32_t));
+    // struct TsetlinMachine *tm = tm_load(file_path, 1, sizeof(int32_t));
     struct SparseTsetlinMachine *stm = stm_load_dense(file_path, 1, sizeof(int32_t));
     struct StatelessTsetlinMachine *sltm = sltm_load_dense(file_path, 1, sizeof(int32_t));
     if (tm == NULL || stm == NULL || sltm == NULL) {
