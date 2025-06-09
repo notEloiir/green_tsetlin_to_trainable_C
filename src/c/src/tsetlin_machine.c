@@ -327,16 +327,12 @@ struct TsetlinMachine *tm_load_fbs(
     // Copy weights data from flatbuffers
     flatbuffers_int16_vec_t weights_vec = TsetlinMachine_ClauseWeightsTensor_weights(weights);
     size_t weights_len = flatbuffers_int16_vec_len(weights_vec);
-    for (size_t i = 0; i < weights_len; i++) {
-        tm->weights[i] = flatbuffers_int16_vec_at(weights_vec, i);
-    }
+    memcpy(tm->weights, weights_vec, weights_len * sizeof(int16_t));
     
     // Copy states data from flatbuffers
     flatbuffers_int8_vec_t states_vec = TsetlinMachine_AutomatonStatesTensor_states(states);
     size_t states_len = flatbuffers_int8_vec_len(states_vec);
-    for (size_t i = 0; i < states_len; i++) {
-        tm->ta_state[i] = flatbuffers_int8_vec_at(states_vec, i);
-    }
+    memcpy(tm->ta_state, states_vec, states_len * sizeof(int8_t));
     
     free(buffer);
     return tm;
