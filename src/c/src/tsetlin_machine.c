@@ -234,6 +234,7 @@ save_error:
     fprintf(stderr, "tm_save aborted, file %s may be incomplete\n", filename);
 }
 
+
 // Load Tsetlin Machine from a flatbuffers file
 struct TsetlinMachine *tm_load_fbs(
     const char *filename, uint32_t y_size, uint32_t y_element_size
@@ -338,9 +339,80 @@ struct TsetlinMachine *tm_load_fbs(
     return tm;
 }
 
+
 // Save Tsetlin Machine to a flatbuffers file
 void tm_save_fbs(struct TsetlinMachine *tm, const char *filename) {
-    // TODO
+    flatcc_builder_t builder;
+    flatcc_builder_init(&builder);
+
+    // Create weights
+    flatbuffers_int16_vec_ref_t weights_vec = flatbuffers_int16_vec_create(&builder, tm->weights, (size_t)tm->num_clauses * tm->num_classes);
+    uint32_t weights_shape_data[] = {tm->num_clauses, tm->num_classes};
+    flatbuffers_uint32_vec_ref_t weights_shape_vec = flatbuffers_uint32_vec_create(&builder, weights_shape_data, 2);
+
+    TsetlinMachine_ClauseWeightsTensor_start(&builder);
+    TsetlinMachine_ClauseWeightsTensor_weights_add(&builder, weights_vec);
+    TsetlinMachine_ClauseWeightsTensor_shape_add(&builder, weights_shape_vec);
+    TsetlinMachine_ClauseWeightsTensor_ref_t clause_weights = TsetlinMachine_ClauseWeightsTensor_end(&builder);
+
+    // Create states
+    flatbuffers_int8_vec_ref_t states_vec = flatbuffers_int8_vec_create(&builder, tm->ta_state, (size_t)tm->num_clauses * tm->num_literals * 2);
+    uint32_t states_shape_data[] = {tm->num_clauses, tm->num_literals, 2};
+    flatbuffers_uint32_vec_ref_t states_shape_vec = flatbuffers_uint32_vec_create(&builder, states_shape_data, 3);
+
+    TsetlinMachine_AutomatonStatesTensor_start(&builder);
+    TsetlinMachine_AutomatonStatesTensor_states_add(&builder, states_vec);
+    TsetlinMachine_AutomatonStatesTensor_shape_add(&builder, states_shape_vec);
+    TsetlinMachine_AutomatonStatesTensor_ref_t automaton_states = TsetlinMachine_AutomatonStatesTensor_end(&builder);
+
+    // Create parameters
+    TsetlinMachine_Parameters_start(&builder);
+    TsetlinMachine_Parameters_threshold_add(&builder, tm->threshold);
+    TsetlinMachine_Parameters_n_literals_add(&builder, tm->num_literals);
+    TsetlinMachine_Parameters_n_clauses_add(&builder, tm->num_clauses);
+    TsetlinMachine_Parameters_n_classes_add(&builder, tm->num_classes);
+    TsetlinMachine_Parameters_max_state_add(&builder, tm->max_state);
+    TsetlinMachine_Parameters_min_state_add(&builder, tm->min_state);
+    TsetlinMachine_Parameters_boost_tp_add(&builder, tm->boost_true_positive_feedback);
+    TsetlinMachine_Parameters_learn_s_add(&builder, tm->s);
+    TsetlinMachine_Parameters_ref_t params = TsetlinMachine_Parameters_end(&builder);
+
+    // Create the TsetlinMachine model
+    TsetlinMachine_Model_start_as_root(&builder);
+    TsetlinMachine_Model_params_add(&builder, params);
+    TsetlinMachine_Model_automaton_states_add(&builder, automaton_states);
+    TsetlinMachine_Model_clause_weights_add(&builder, clause_weights);
+    // Skip optional 'literal_names' field
+    TsetlinMachine_Model_end_as_root(&builder);
+
+    // Finalize the buffer
+    void *buf;
+    size_t size;
+
+    buf = flatcc_builder_finalize_aligned_buffer(&builder, &size);
+    if (buf == NULL) {
+        fprintf(stderr, "Failed to finalize flatbuffers buffer\n");
+        flatcc_builder_clear(&builder);
+        return;
+    }
+
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file for writing");
+        flatcc_builder_aligned_free(buf);
+        flatcc_builder_clear(&builder);
+        return;
+    }
+
+    size_t written = fwrite(buf, 1, size, file);
+    if (written != size) {
+        fprintf(stderr, "Failed to write the entire buffer to file %s\n", filename);
+    }
+    fclose(file);
+
+    // Clean up
+    flatcc_builder_aligned_free(buf);
+    flatcc_builder_clear(&builder);
 }
 
 
