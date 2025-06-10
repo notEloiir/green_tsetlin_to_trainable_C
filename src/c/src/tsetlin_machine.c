@@ -4,6 +4,7 @@
 #include <string.h>
 #include <limits.h>
 
+#include "flatbuffers/tsetlin_machine_builder.h"
 #include "tsetlin_machine.h"
 #include "utility.h"
 
@@ -231,6 +232,187 @@ void tm_save(struct TsetlinMachine *tm, const char *filename) {
 save_error:
     fclose(file);
     fprintf(stderr, "tm_save aborted, file %s may be incomplete\n", filename);
+}
+
+
+// Load Tsetlin Machine from a flatbuffers file
+struct TsetlinMachine *tm_load_fbs(
+    const char *filename, uint32_t y_size, uint32_t y_element_size
+) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Error opening file");
+        return NULL;
+    }
+    
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    size_t file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    // Read the file into a buffer
+    uint8_t *buffer = (uint8_t *)malloc(file_size);
+    if (!buffer) {
+        perror("Buffer allocation failed");
+        fclose(file);
+        return NULL;
+    }
+    
+    size_t bytes_read = fread(buffer, 1, file_size, file);
+    fclose(file);
+    
+    if (bytes_read != file_size) {
+        fprintf(stderr, "Failed to read the entire file\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    uint32_t threshold, num_literals, num_clauses, num_classes;
+    int8_t max_state, min_state;
+    uint8_t boost_true_positive_feedback;
+    float s;
+    
+    // Parse the flatbuffers model
+    TsetlinMachine_Model_table_t model = TsetlinMachine_Model_as_root(buffer);
+    if (!model) {
+        fprintf(stderr, "Failed to parse flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    // Extract parameters
+    TsetlinMachine_Parameters_table_t params = TsetlinMachine_Model_params(model);
+    if (!params) {
+        fprintf(stderr, "Failed to get parameters from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+
+    // Extract weights
+    TsetlinMachine_ClauseWeightsTensor_table_t weights = TsetlinMachine_Model_clause_weights(model);
+    if (!weights) {
+        fprintf(stderr, "Failed to get weights from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+
+    // Extract states
+    TsetlinMachine_AutomatonStatesTensor_table_t states = TsetlinMachine_Model_automaton_states(model);
+    if (!states) {
+        fprintf(stderr, "Failed to get states from flatbuffers model\n");
+        free(buffer);
+        return NULL;
+    }
+    
+
+    threshold = TsetlinMachine_Parameters_threshold(params);
+    num_literals = TsetlinMachine_Parameters_n_literals(params);
+    num_clauses = TsetlinMachine_Parameters_n_clauses(params);
+    num_classes = TsetlinMachine_Parameters_n_classes(params);
+    max_state = TsetlinMachine_Parameters_max_state(params);
+    min_state = TsetlinMachine_Parameters_min_state(params);
+    boost_true_positive_feedback = TsetlinMachine_Parameters_boost_tp(params);
+    s = TsetlinMachine_Parameters_learn_s(params);
+
+    struct TsetlinMachine *tm = tm_create(
+        num_classes, threshold, num_literals, num_clauses,
+        max_state, min_state, boost_true_positive_feedback,
+        y_size, y_element_size, s
+    );
+    if (!tm) {
+        fprintf(stderr, "tm_create failed\n");
+        free(buffer);
+        return NULL;
+    }
+    
+    // Copy weights data from flatbuffers
+    flatbuffers_int16_vec_t weights_vec = TsetlinMachine_ClauseWeightsTensor_weights(weights);
+    size_t weights_len = flatbuffers_int16_vec_len(weights_vec);
+    memcpy(tm->weights, weights_vec, weights_len * sizeof(int16_t));
+    
+    // Copy states data from flatbuffers
+    flatbuffers_int8_vec_t states_vec = TsetlinMachine_AutomatonStatesTensor_states(states);
+    size_t states_len = flatbuffers_int8_vec_len(states_vec);
+    memcpy(tm->ta_state, states_vec, states_len * sizeof(int8_t));
+    
+    free(buffer);
+    return tm;
+}
+
+
+// Save Tsetlin Machine to a flatbuffers file
+void tm_save_fbs(struct TsetlinMachine *tm, const char *filename) {
+    flatcc_builder_t builder;
+    flatcc_builder_init(&builder);
+
+    // Create weights
+    flatbuffers_int16_vec_ref_t weights_vec = flatbuffers_int16_vec_create(&builder, tm->weights, (size_t)tm->num_clauses * tm->num_classes);
+    uint32_t weights_shape_data[] = {tm->num_clauses, tm->num_classes};
+    flatbuffers_uint32_vec_ref_t weights_shape_vec = flatbuffers_uint32_vec_create(&builder, weights_shape_data, 2);
+
+    TsetlinMachine_ClauseWeightsTensor_start(&builder);
+    TsetlinMachine_ClauseWeightsTensor_weights_add(&builder, weights_vec);
+    TsetlinMachine_ClauseWeightsTensor_shape_add(&builder, weights_shape_vec);
+    TsetlinMachine_ClauseWeightsTensor_ref_t clause_weights = TsetlinMachine_ClauseWeightsTensor_end(&builder);
+
+    // Create states
+    flatbuffers_int8_vec_ref_t states_vec = flatbuffers_int8_vec_create(&builder, tm->ta_state, (size_t)tm->num_clauses * tm->num_literals * 2);
+    uint32_t states_shape_data[] = {tm->num_clauses, tm->num_literals, 2};
+    flatbuffers_uint32_vec_ref_t states_shape_vec = flatbuffers_uint32_vec_create(&builder, states_shape_data, 3);
+
+    TsetlinMachine_AutomatonStatesTensor_start(&builder);
+    TsetlinMachine_AutomatonStatesTensor_states_add(&builder, states_vec);
+    TsetlinMachine_AutomatonStatesTensor_shape_add(&builder, states_shape_vec);
+    TsetlinMachine_AutomatonStatesTensor_ref_t automaton_states = TsetlinMachine_AutomatonStatesTensor_end(&builder);
+
+    // Create parameters
+    TsetlinMachine_Parameters_start(&builder);
+    TsetlinMachine_Parameters_threshold_add(&builder, tm->threshold);
+    TsetlinMachine_Parameters_n_literals_add(&builder, tm->num_literals);
+    TsetlinMachine_Parameters_n_clauses_add(&builder, tm->num_clauses);
+    TsetlinMachine_Parameters_n_classes_add(&builder, tm->num_classes);
+    TsetlinMachine_Parameters_max_state_add(&builder, tm->max_state);
+    TsetlinMachine_Parameters_min_state_add(&builder, tm->min_state);
+    TsetlinMachine_Parameters_boost_tp_add(&builder, tm->boost_true_positive_feedback);
+    TsetlinMachine_Parameters_learn_s_add(&builder, tm->s);
+    TsetlinMachine_Parameters_ref_t params = TsetlinMachine_Parameters_end(&builder);
+
+    // Create the TsetlinMachine model
+    TsetlinMachine_Model_start_as_root(&builder);
+    TsetlinMachine_Model_params_add(&builder, params);
+    TsetlinMachine_Model_automaton_states_add(&builder, automaton_states);
+    TsetlinMachine_Model_clause_weights_add(&builder, clause_weights);
+    // Skip optional 'literal_names' field
+    TsetlinMachine_Model_end_as_root(&builder);
+
+    // Finalize the buffer
+    void *buf;
+    size_t size;
+
+    buf = flatcc_builder_finalize_aligned_buffer(&builder, &size);
+    if (buf == NULL) {
+        fprintf(stderr, "Failed to finalize flatbuffers buffer\n");
+        flatcc_builder_clear(&builder);
+        return;
+    }
+
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file for writing");
+        flatcc_builder_aligned_free(buf);
+        flatcc_builder_clear(&builder);
+        return;
+    }
+
+    size_t written = fwrite(buf, 1, size, file);
+    if (written != size) {
+        fprintf(stderr, "Failed to write the entire buffer to file %s\n", filename);
+    }
+    fclose(file);
+
+    // Clean up
+    flatcc_builder_aligned_free(buf);
+    flatcc_builder_clear(&builder);
 }
 
 

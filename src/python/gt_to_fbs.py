@@ -28,7 +28,7 @@ def save_to_fbs(
     weights_shape = np.array(weights.shape, dtype=np.int32)
 
     clauses = np.astype(tm._state.c, np.int8)
-    clauses_reshaped = clauses.reshape(n_clauses, n_literals, 2)
+    clauses_reshaped = clauses.reshape(n_clauses, 2, n_literals).transpose(0, 2, 1)
     clauses_reshaped_shape = np.array(clauses_reshaped.shape, dtype=np.int32)
 
     if not (literal_names := get_literal_names(tm)):
