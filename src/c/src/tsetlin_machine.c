@@ -23,7 +23,7 @@ void tm_initialize(struct TsetlinMachine *tm);
 struct TsetlinMachine *tm_create(
     uint32_t num_classes, uint32_t threshold, uint32_t num_literals, uint32_t num_clauses,
     int8_t max_state, int8_t min_state, uint8_t boost_true_positive_feedback,
-    uint32_t y_size, uint32_t y_element_size, float s
+    uint32_t y_size, uint32_t y_element_size, float s, uint32_t seed
 ) {
     struct TsetlinMachine *tm = (struct TsetlinMachine *)malloc(sizeof(struct TsetlinMachine));
     if(tm == NULL) {
@@ -74,6 +74,8 @@ struct TsetlinMachine *tm_create(
         return NULL;
     }
 
+    prng_seed(&(tm->rng), seed);
+
     /* Set up the Tsetlin Machine structure */
 
     tm_initialize(tm);
@@ -96,6 +98,7 @@ struct TsetlinMachine *tm_load(
     int8_t max_state, min_state;
     uint8_t boost_true_positive_feedback;
     double s_double;
+    uint32_t seed = 42;
 
     size_t threshold_read, num_literals_read, num_clauses_read, num_classes_read;
     size_t max_state_read, min_state_read, boost_true_positive_feedback_read, s_double_read;
@@ -121,7 +124,7 @@ struct TsetlinMachine *tm_load(
     struct TsetlinMachine *tm = tm_create(
         num_classes, threshold, num_literals, num_clauses,
         max_state, min_state, boost_true_positive_feedback,
-        y_size, y_element_size, (float)s_double
+        y_size, y_element_size, (float)s_double, seed
     );
     if (!tm) {
         fprintf(stderr, "tm_create failed\n");
@@ -261,7 +264,7 @@ void tm_initialize(struct TsetlinMachine *tm) {
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {				
         for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-            if (1.0 * rand()/RAND_MAX <= 0.5) {
+            if (1.0 * prng_next(&(tm->rng))/RAND_MAX <= 0.5) {
                 // positive literal
                 tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0] = tm->mid_state - 1;
                 // negative literal
@@ -276,7 +279,7 @@ void tm_initialize(struct TsetlinMachine *tm) {
     // Init weights randomly to -1 or 1
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
-            tm->weights[(clause_id * tm->num_classes) + class_id] = 1 - 2*(1.0 * rand()/RAND_MAX <= 0.5);
+            tm->weights[(clause_id * tm->num_classes) + class_id] = 1 - 2*(1.0 * prng_next(&(tm->rng))/RAND_MAX <= 0.5);
         }
     }
 }
@@ -355,24 +358,24 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, const uint8_t *X,
             // True positive
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] +=
 				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength) * (
-                (tm->boost_true_positive_feedback == 1 || 1.0*rand()/RAND_MAX <= tm->s_min1_inv));
+                (tm->boost_true_positive_feedback == 1 || 1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_min1_inv));
 
             // False negative
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
 				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
-                (1.0*rand()/RAND_MAX <= tm->s_inv));
+                (1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_inv));
 
         } else {
             // True negative
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] +=
 				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength) * (
-                (1.0*rand()/RAND_MAX <= tm->s_min1_inv));
+                (1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_min1_inv));
             
             // False positive
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
 				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
                 (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] > tm->min_state) && 
-                (1.0*rand()/RAND_MAX <= tm->s_inv));
+                (1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_inv));
         }
     }
 }
@@ -387,11 +390,11 @@ static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_i
     for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
         tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
 			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
-            (1.0*rand()/RAND_MAX <= tm->s_inv));
+            (1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_inv));
 
         tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
 			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
-            (1.0*rand()/RAND_MAX <= tm->s_inv));
+            (1.0*prng_next(&(tm->rng))/RAND_MAX <= tm->s_inv));
     }
 }
 
@@ -555,7 +558,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-    	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+    	if (1.0 * prng_next(&(tm->rng))/RAND_MAX <= update_probability_positive) {
     		tm_apply_feedback(tm, clause_id, positive_class, 1, X);
     	}
     }
@@ -567,7 +570,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
         }
     }
     if (sum_votes_clipped_negative == 0) return;
-    int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+    int32_t random_vote_negative = prng_next(&(tm->rng)) % sum_votes_clipped_negative;
     int32_t accumulated_votes = 0;
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         if (class_id != positive_class) {
@@ -583,7 +586,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+		if (1.0 * prng_next(&(tm->rng))/RAND_MAX <= update_probability_negative) {
 			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
 		}
     }
@@ -601,7 +604,7 @@ void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const v
 		}
 	}
 	if (sum_votes_clipped_positive == 0) goto negative_feedback;
-	int32_t random_vote_positive = rand() % sum_votes_clipped_positive;
+	int32_t random_vote_positive = prng_next(&(tm->rng)) % sum_votes_clipped_positive;
 	int32_t accumulated_votes_positive = 0;
 	for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
 		if (label_arr[class_id]) {
@@ -617,7 +620,7 @@ void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const v
 	float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
 	for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+		if (1.0 * prng_next(&(tm->rng))/RAND_MAX <= update_probability_positive) {
 			tm_apply_feedback(tm, clause_id, positive_class, 1, X);
 		}
 	}
@@ -631,7 +634,7 @@ negative_feedback:
 		}
 	}
 	if (sum_votes_clipped_negative == 0) return;
-	int32_t random_vote_negative = rand() % sum_votes_clipped_negative;
+	int32_t random_vote_negative = prng_next(&(tm->rng)) % sum_votes_clipped_negative;
 	int32_t accumulated_votes_negative = 0;
 	for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
 		if (!label_arr[class_id]) {
@@ -647,7 +650,7 @@ negative_feedback:
 	float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+		if (1.0 * prng_next(&(tm->rng))/RAND_MAX <= update_probability_negative) {
 			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
 		}
     }

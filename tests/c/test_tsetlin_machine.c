@@ -4,10 +4,11 @@
 
 #include "../../src/c/src/tsetlin_machine.c"
 #include "../../src/c/src/utility.c"
+#include "../../src/c/src/fast_prng.c"
 
 
 void basic_inference(void) {
-    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 0, 1, sizeof(uint8_t), 10.f, 42);
     // One clause that "activates" on literal values: 10x where x means any
     tm->ta_state[0] = 1; tm->ta_state[1] = -1;
     tm->ta_state[2] = -1; tm->ta_state[3] = 1;
@@ -41,7 +42,7 @@ void basic_inference(void) {
 }
 
 void basic_training(void) {
-    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 0, 1, sizeof(uint8_t), 10.f, 42);
     // One clause that "activates" on literal values: 10x where x means any
     tm->ta_state[0] = 1; tm->ta_state[1] = -1;
     tm->ta_state[2] = -1; tm->ta_state[3] = 1;
@@ -64,7 +65,7 @@ void basic_training(void) {
 
     uint8_t *y = malloc(1 * sizeof(uint8_t));
     y[0] = 0;
-    tm_train(tm, X, y, 1, 1, 10);  // 1 datapoint, 10 epochs
+    tm_train(tm, X, y, 1, 10);  // 1 datapoint, 10 epochs
 
     tm_predict(tm, X, y_pred, 1);
     TEST_ASSERT_EQUAL_INT(0, y_pred[0]);
@@ -76,7 +77,7 @@ void basic_training(void) {
 }
 
 void test_calculate_clause_output(void) {
-    struct TsetlinMachine *tm = tm_create(1, 50, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+    struct TsetlinMachine *tm = tm_create(1, 50, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f, 42);
     tm->ta_state[0] = 100;
     tm->ta_state[1] = -100;
     tm->ta_state[2] = 100;
@@ -96,7 +97,7 @@ void test_calculate_clause_output(void) {
 }
 
 void test_sum_votes(void) {
-    struct TsetlinMachine *tm = tm_create(2, 100, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f);
+    struct TsetlinMachine *tm = tm_create(2, 100, 2, 2, 127, -127, 0, 1, sizeof(uint8_t), 10.f, 42);
 
     tm->clause_output[0] = 1;
     tm->clause_output[1] = 0;
@@ -116,13 +117,12 @@ void test_sum_votes(void) {
 
 
 void test_type_1a_feedback(void) {
-    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 10.f);
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 10.f, 42);
     tm->ta_state[0] = 1; tm->ta_state[1] = -1;
     tm->ta_state[2] = -1; tm->ta_state[3] = 1;
     tm->ta_state[4] = -1; tm->ta_state[5] = -1;
 
     tm->weights[0] = 1;
-    tm->feedback[0] = 1;
 
     uint8_t X[] = {1, 0, 0};
 
@@ -142,14 +142,13 @@ void test_type_1a_feedback(void) {
 }
 
 void test_type_1b_feedback(void) {
-    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f);
-    tm->feedback[1] = 1;
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f, 42);
 
     tm->ta_state[0] = 1; tm->ta_state[1] = -1;
     tm->ta_state[2] = -1; tm->ta_state[3] = 1;
     tm->ta_state[4] = -1; tm->ta_state[5] = -1;
 
-    type_1b_feedback(tm, 0, 0);
+    type_1b_feedback(tm, 0);
 
     TEST_ASSERT_EQUAL_INT(0, tm->ta_state[0]);
     TEST_ASSERT_EQUAL_INT(-2, tm->ta_state[1]);
@@ -162,8 +161,7 @@ void test_type_1b_feedback(void) {
 }
 
 void test_type_2_feedback(void) {
-    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f);
-    tm->feedback[2] = 1;
+    struct TsetlinMachine *tm = tm_create(1, 100, 3, 1, 127, -127, 1, 1, sizeof(uint8_t), 1.f, 42);
 
     tm->ta_state[0] = 1; tm->ta_state[1] = -1;
     tm->ta_state[2] = -1; tm->ta_state[3] = 1;

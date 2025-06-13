@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "fast_prng.h"
 
 
 // --- Sparse Tsetlin Machine ---
@@ -33,6 +34,8 @@ struct SparseTsetlinMachine {
     int16_t *weights;  // shape: flat (num_clauses, num_classes)
     uint8_t *clause_output;  // shape: (num_clauses)
     int32_t *votes;  // shape: (num_classes)
+
+    struct FastPRNG rng;
 };
 
 
@@ -44,7 +47,7 @@ struct SparseTsetlinMachine {
 struct SparseTsetlinMachine *stm_create(
     uint32_t num_classes, uint32_t threshold, uint32_t num_literals, uint32_t num_clauses,
     int8_t max_state, int8_t min_state, uint8_t boost_true_positive_feedback, 
-    uint32_t y_size, uint32_t y_element_size, float s
+    uint32_t y_size, uint32_t y_element_size, float s, uint32_t seed
 );
 
 // Load Tsetlin Machine from a bin file
