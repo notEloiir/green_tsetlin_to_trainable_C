@@ -430,11 +430,8 @@ void tm_train(struct TsetlinMachine *tm, const uint8_t *X, const void *y, uint32
 
 			sum_votes(tm);
 
-			// Iterate over all clauses, not only active ones (1b)
-			// Calculate pseudo gradient - feedback to clause-class vote weight
-			for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-				tm->calculate_feedback(tm, X_row, y_row, clause_id);
-			}
+			// Calculate and apply feedback to all clauses
+			tm->calculate_feedback(tm, X_row, y_row);
         }
     }
 }
@@ -548,7 +545,7 @@ void tm_apply_feedback(struct TsetlinMachine *tm, uint32_t clause_id, uint32_t c
 // --- calculate_feedback ---
 // Calculate clause-class feedback
 
-void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const void *y, uint32_t clause_id) {
+void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const void *y) {
     // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
     const uint32_t *label_ptr = (const uint32_t *)y;
     const uint32_t positive_class = *label_ptr;
@@ -557,8 +554,10 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     int32_t votes_clipped_positive = clip(tm->votes[positive_class], (int32_t)tm->threshold);
     float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
-    if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
-    	tm_apply_feedback(tm, clause_id, positive_class, 1, X);
+    for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+    	if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+    		tm_apply_feedback(tm, clause_id, positive_class, 1, X);
+    	}
     }
 
     int32_t sum_votes_clipped_negative = 0;
@@ -583,12 +582,14 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     int32_t votes_clipped_negative = clip(tm->votes[negative_class], (int32_t)tm->threshold);
     float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
-    if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
-    	tm_apply_feedback(tm, clause_id, negative_class, 0, X);
+    for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+		if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
+		}
     }
 }
 
-void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const void *y, uint32_t clause_id) {
+void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const void *y) {
     const uint8_t *label_arr = (const uint8_t *)y;
     uint32_t positive_class = 0;
     uint32_t negative_class = 0;
@@ -615,9 +616,11 @@ void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const v
 	int32_t votes_clipped_positive = clip(tm->votes[negative_class], (int32_t)tm->threshold);
 	float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
-    if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
-    	tm_apply_feedback(tm, clause_id, positive_class, 1, X);
-    }
+	for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+		if (1.0 * rand()/RAND_MAX <= update_probability_positive) {
+			tm_apply_feedback(tm, clause_id, positive_class, 1, X);
+		}
+	}
 
 negative_feedback:
 
@@ -643,15 +646,17 @@ negative_feedback:
 	int32_t votes_clipped_negative = clip(tm->votes[negative_class], (int32_t)tm->threshold);
 	float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
-	if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
-		tm_apply_feedback(tm, clause_id, negative_class, 0, X);
-	}
+    for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
+		if (1.0 * rand()/RAND_MAX <= update_probability_negative) {
+			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
+		}
+    }
 }
 
 
 void tm_set_calculate_feedback(
     struct TsetlinMachine *tm,
-    void (*calculate_feedback)(struct TsetlinMachine *tm, const uint8_t *X, const void *y, uint32_t clause_id)
+    void (*calculate_feedback)(struct TsetlinMachine *tm, const uint8_t *X, const void *y)
 ) {
     tm->calculate_feedback = calculate_feedback;
 }

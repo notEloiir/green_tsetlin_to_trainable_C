@@ -25,7 +25,7 @@ struct SparseTsetlinMachine {
     uint32_t y_size, y_element_size;
     uint8_t (*y_eq)(const struct SparseTsetlinMachine *stm, const void *y, const void *y_pred);
     void (*output_activation)(const struct SparseTsetlinMachine *stm, const void *y_pred);
-    void (*calculate_feedback)(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y, uint32_t clause_id);
+    void (*calculate_feedback)(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y);
 
     int8_t mid_state;
     float s_inv, s_min1_inv;
@@ -93,14 +93,14 @@ void stm_set_output_activation(
 // --- calculate_feedback ---
 // Calculate clause-class feedback
 
-void stm_feedback_class_idx(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y, uint32_t clause_id);  // y_size = 1
-void stm_feedback_bin_vector(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y, uint32_t clause_id);  // y_size = tm->num_classes
+void stm_feedback_class_idx(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y);  // y_size = 1
+void stm_feedback_bin_vector(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y);  // y_size = tm->num_classes
 
 // Internal component of feedback functions, included in header if you want to create your own
 void stm_apply_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive, const uint8_t *X);
 
 void stm_set_calculate_feedback(
     struct SparseTsetlinMachine *stm,
-    void (*calculate_feedback)(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y, uint32_t clause_id)
+    void (*calculate_feedback)(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y)
 );
 
