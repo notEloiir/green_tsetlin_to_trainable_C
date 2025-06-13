@@ -379,7 +379,7 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, const uint8_t *X,
 
 
 // Type b - Clause is inactive for literals X (clause_output == 0)
-static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_id, uint32_t class_id) {
+static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_id) {
     // float s_inv = 1.0f / tm->s;
 
     uint8_t feedback_strength = 1;
@@ -534,7 +534,7 @@ void tm_apply_feedback(struct TsetlinMachine *tm, uint32_t clause_id, uint32_t c
 			type_1a_feedback(tm, X, clause_id, class_id);
 		}
 		else {
-			type_1b_feedback(tm, clause_id, class_id);
+			type_1b_feedback(tm, clause_id);
 		}
 	}
 	else if (tm->clause_output[clause_id] == 1) {

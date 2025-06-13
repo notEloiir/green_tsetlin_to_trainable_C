@@ -479,7 +479,7 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
 
 
 // Type b - Clause is inactive for literals X (clause_output == 0)
-void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id) {
+void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id) {
     // float s_inv = 1.0f / stm->s;
 
     uint8_t feedback_strength = 1;
@@ -649,7 +649,7 @@ void stm_apply_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, ui
 			type_1a_feedback(stm, X, clause_id, class_id);
 		}
 		else {
-			type_1b_feedback(stm, clause_id, class_id);
+			type_1b_feedback(stm, clause_id);
 		}
 	}
 	else if (stm->clause_output[clause_id] == 1) {

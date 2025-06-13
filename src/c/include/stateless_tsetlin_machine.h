@@ -23,7 +23,7 @@ struct StatelessTsetlinMachine {
 
     uint32_t y_size, y_element_size;
     uint8_t (*y_eq)(const struct StatelessTsetlinMachine *sltm, const void *y, const void *y_pred);
-    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, void *y_pred);
+    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, const void *y_pred);
 
     int8_t mid_state;
     float s_inv, s_min1_inv;
@@ -52,17 +52,17 @@ struct StatelessTsetlinMachine *sltm_load_dense(
 );
 
 // Save Tsetlin Machine to a bin file
-void sltm_save(struct StatelessTsetlinMachine *sltm, const char *filename);
+void sltm_save(const struct StatelessTsetlinMachine *sltm, const char *filename);
 
 // Deallocate all memory
 void sltm_free(struct StatelessTsetlinMachine *sltm);
 
 // Inference
 // Writes to the result array y_pred of size (rows * sltm->y_size) and element size sltm->y_element_size (same as y)
-void sltm_predict(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y_pred, uint32_t rows);
+void sltm_predict(struct StatelessTsetlinMachine *sltm, const uint8_t *X, void *y_pred, uint32_t rows);
 
 // Simple accuracy evaluation
-void sltm_evaluate(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y, uint32_t rows);
+void sltm_evaluate(struct StatelessTsetlinMachine *sltm, const uint8_t *X, const void *y, uint32_t rows);
 
 
 // --- y_eq ---
@@ -77,10 +77,10 @@ uint8_t sltm_y_eq_generic(const struct StatelessTsetlinMachine *sltm, const void
 // The raw output of a Tsetlin Machine are just summed up votes (sltm->votes), of shape (num_classes)
 // This function translates votes into a desirable format of any type (void *)
 
-void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, void *y_pred);  // y_size = 1
-void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, void *y_pred);  // y_size = tm->num_classes
+void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, const void *y_pred);  // y_size = 1
+void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, const void *y_pred);  // y_size = tm->num_classes
 
 void sltm_set_output_activation(
     struct StatelessTsetlinMachine *sltm,
-    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, void *y_pred)
+    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, const void *y_pred)
 );
