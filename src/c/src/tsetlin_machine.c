@@ -264,7 +264,7 @@ void tm_initialize(struct TsetlinMachine *tm) {
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {				
         for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
-            if (1.0 * prng_next(&(tm->rng))/UINT32_MAX <= 0.5) {
+            if (prng_next_float(&(tm->rng)) <= 0.5) {
                 // positive literal
                 tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 0] = tm->mid_state - 1;
                 // negative literal
@@ -279,7 +279,7 @@ void tm_initialize(struct TsetlinMachine *tm) {
     // Init weights randomly to -1 or 1
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
         for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
-            tm->weights[(clause_id * tm->num_classes) + class_id] = 1 - 2*(1.0 * prng_next(&(tm->rng))/UINT32_MAX <= 0.5);
+            tm->weights[(clause_id * tm->num_classes) + class_id] = 1 - 2*(prng_next_float(&(tm->rng)) <= 0.5);
         }
     }
 }
@@ -358,24 +358,23 @@ static inline void type_1a_feedback(struct TsetlinMachine *tm, const uint8_t *X,
             // True positive
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] +=
 				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)], feedback_strength) * (
-                (tm->boost_true_positive_feedback == 1 || 1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_min1_inv));
+                (tm->boost_true_positive_feedback == 1 || prng_next_float(&(tm->rng)) <= tm->s_min1_inv));
 
             // False negative
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
 				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
-                (1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_inv));
+                (prng_next_float(&(tm->rng)) <= tm->s_inv));
 
         } else {
             // True negative
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] +=
 				min(tm->max_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1], feedback_strength) * (
-                (1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_min1_inv));
+                (prng_next_float(&(tm->rng)) <= tm->s_min1_inv));
             
             // False positive
             tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
 				min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
-                (tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] > tm->min_state) && 
-                (1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_inv));
+                (prng_next_float(&(tm->rng)) <= tm->s_inv));
         }
     }
 }
@@ -390,11 +389,11 @@ static inline void type_1b_feedback(struct TsetlinMachine *tm, uint32_t clause_i
     for (uint32_t literal_id = 0; literal_id < tm->num_literals; literal_id++) {
         tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)] -=
 			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2)]), feedback_strength) * (
-            (1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_inv));
+            (prng_next_float(&(tm->rng)) <= tm->s_inv));
 
         tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1] -=
 			min(-(tm->min_state - tm->ta_state[(((clause_id * tm->num_literals) + literal_id) * 2) + 1]), feedback_strength) * (
-            (1.0*prng_next(&(tm->rng))/UINT32_MAX <= tm->s_inv));
+            (prng_next_float(&(tm->rng)) <= tm->s_inv));
     }
 }
 
@@ -558,7 +557,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-    	if (1.0 * prng_next(&(tm->rng))/UINT32_MAX <= update_probability_positive) {
+    	if (prng_next_float(&(tm->rng)) <= update_probability_positive) {
     		tm_apply_feedback(tm, clause_id, positive_class, 1, X);
     	}
     }
@@ -570,7 +569,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
         }
     }
     if (sum_votes_clipped_negative == 0) return;
-    int32_t random_vote_negative = prng_next(&(tm->rng)) % sum_votes_clipped_negative;
+    int32_t random_vote_negative = prng_next_uint32(&(tm->rng)) % sum_votes_clipped_negative;
     int32_t accumulated_votes = 0;
     for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
         if (class_id != positive_class) {
@@ -586,7 +585,7 @@ void tm_feedback_class_idx(struct TsetlinMachine *tm, const uint8_t *X, const vo
     float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * prng_next(&(tm->rng))/UINT32_MAX <= update_probability_negative) {
+		if (prng_next_float(&(tm->rng)) <= update_probability_negative) {
 			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
 		}
     }
@@ -604,7 +603,7 @@ void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const v
 		}
 	}
 	if (sum_votes_clipped_positive == 0) goto negative_feedback;
-	int32_t random_vote_positive = prng_next(&(tm->rng)) % sum_votes_clipped_positive;
+	int32_t random_vote_positive = prng_next_uint32(&(tm->rng)) % sum_votes_clipped_positive;
 	int32_t accumulated_votes_positive = 0;
 	for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
 		if (label_arr[class_id]) {
@@ -620,7 +619,7 @@ void tm_feedback_bin_vector(struct TsetlinMachine *tm, const uint8_t *X, const v
 	float update_probability_positive = ((float)tm->threshold - (float)votes_clipped_positive) / (float)(2 * tm->threshold);
 
 	for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * prng_next(&(tm->rng))/UINT32_MAX <= update_probability_positive) {
+		if (prng_next_float(&(tm->rng)) <= update_probability_positive) {
 			tm_apply_feedback(tm, clause_id, positive_class, 1, X);
 		}
 	}
@@ -634,7 +633,7 @@ negative_feedback:
 		}
 	}
 	if (sum_votes_clipped_negative == 0) return;
-	int32_t random_vote_negative = prng_next(&(tm->rng)) % sum_votes_clipped_negative;
+	int32_t random_vote_negative = prng_next_uint32(&(tm->rng)) % sum_votes_clipped_negative;
 	int32_t accumulated_votes_negative = 0;
 	for (uint32_t class_id = 0; class_id < tm->num_classes; class_id++) {
 		if (!label_arr[class_id]) {
@@ -650,7 +649,7 @@ negative_feedback:
 	float update_probability_negative = ((float)votes_clipped_negative + (float)tm->threshold) / (float)(2 * tm->threshold);
 
     for (uint32_t clause_id = 0; clause_id < tm->num_clauses; clause_id++) {
-		if (1.0 * prng_next(&(tm->rng))/UINT32_MAX <= update_probability_negative) {
+		if (prng_next_float(&(tm->rng)) <= update_probability_negative) {
 			tm_apply_feedback(tm, clause_id, negative_class, 0, X);
 		}
     }
