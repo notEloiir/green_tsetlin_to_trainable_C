@@ -21,6 +21,8 @@ struct TsetlinMachine {
     void (*calculate_feedback)(struct TsetlinMachine *tm, const uint8_t *X, const void *y);
 
 	int8_t mid_state;
+	uint8_t ta_state_padding;
+	uint32_t ta_state_cols;
     float s_inv, s_min1_inv;
 	int8_t *ta_state;  // shape: flat (num_clauses, num_literals, 2)
 	int16_t *weights;  // shape: flat (num_clauses, num_classes)
