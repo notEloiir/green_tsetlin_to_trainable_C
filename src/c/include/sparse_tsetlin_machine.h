@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "fast_prng.h"
+#include "stateless_tsetlin_machine.h"
 
 
 // --- Sparse Tsetlin Machine ---
@@ -9,6 +10,7 @@
 struct TAStateNode {
 	uint32_t ta_id;
     int8_t ta_state;
+    uint8_t has_state;  // 0b11111111 = has state, 0b00000000 = no state, can be used as bit mask
     struct TAStateNode *next;
 };
 void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, uint32_t ta_id, uint8_t ta_state, struct TAStateNode **result);
@@ -31,6 +33,7 @@ struct SparseTsetlinMachine {
     int8_t mid_state;
     float s_inv, s_min1_inv;
     struct TAStateNode **ta_state;  // shape: (num_clauses) linked list pointers
+    struct TANode **active_literals;  // shape: (num_classes) linked list pointers
     int16_t *weights;  // shape: flat (num_clauses, num_classes)
     uint8_t *clause_output;  // shape: (num_clauses)
     int32_t *votes;  // shape: (num_classes)
