@@ -393,7 +393,8 @@ void stm_free(struct SparseTsetlinMachine *stm) {
 // Initialize values
 void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->mid_state = (stm->max_state + stm->min_state) / 2;
-    stm->sparse_init_state = stm->mid_state + 5;
+    stm->sparse_init_state = stm->mid_state - 35;
+    stm->sparse_min_state = stm->mid_state - 40;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
     
@@ -507,7 +508,7 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
 				min(-(stm->min_state - state_ptr->ta_state), feedback_strength) *
 				prng_next_float(&(stm->rng)) <= stm->s_inv;
 
-            if (state_ptr->ta_state < stm->mid_state) {
+            if (state_ptr->ta_state < stm->sparse_min_state) {
             	// Remove TA
             	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
                 continue;
@@ -537,7 +538,7 @@ void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id) {
 			min(-(stm->min_state - state_ptr->ta_state), feedback_strength) *
 			prng_next_float(&(stm->rng)) <= stm->s_inv;
 
-        if (state_ptr->ta_state < stm->mid_state) {
+        if (state_ptr->ta_state < stm->sparse_min_state) {
         	// Remove TA
         	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
         	continue;
