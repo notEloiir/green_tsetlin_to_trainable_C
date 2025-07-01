@@ -393,18 +393,9 @@ void stm_free(struct SparseTsetlinMachine *stm) {
 // Initialize values
 void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->mid_state = (stm->max_state + stm->min_state) / 2;
-    stm->sparse_min_state = stm->mid_state - 5;
+    stm->sparse_init_state = stm->mid_state + 5;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
-
-    for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
-		struct TAStateNode *prev_ptr = NULL;
-		struct TAStateNode **head_ptr_addr = stm->ta_state + clause_id;
-
-		for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-			ta_state_insert(head_ptr_addr, prev_ptr, i, (-prng_next_float(&(stm->rng)) <= 0.5), &prev_ptr);
-		}
-    }
     
     // Init weights randomly to -1 or 1
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
@@ -484,16 +475,20 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
     struct TANode *prev_al_ptr = NULL;
 
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i;
-        if (is_active_literal) {
+        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i / 2;
+        if (is_active_literal && i % 2 == 1) {
             prev_al_ptr = al_ptr;
             al_ptr = al_ptr->next;
         }
 
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
-    		if (!is_active_literal && (i % 2 != X[i / 2])) {
-				// Insert new active literal for class class_id
-				ta_stateless_insert(stm->active_literals + class_id, prev_al_ptr, i, &prev_al_ptr);
+    		if (!is_active_literal && i % 2 == 0 && X[i / 2] == 1) {
+                // (i % 2 != X[i / 2]) means TA i "votes" correctly (condition for applying 1a feedback)
+                // (i % 2 == 0) means only positive TAs
+                // (X[i / 2] == 1) means literal at i/2 is active
+
+				// Insert new active literal i/2 for class class_id
+				ta_stateless_insert(stm->active_literals + class_id, prev_al_ptr, i / 2, &prev_al_ptr);
 				al_ptr = prev_al_ptr->next;
     		}
     		continue;
@@ -507,11 +502,12 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
 				(stm->boost_true_positive_feedback == 1 || prng_next_float(&(stm->rng)) <= stm->s_min1_inv);
         }
         else {
+            // Incorrect, punish
             state_ptr->ta_state -=
 				min(-(stm->min_state - state_ptr->ta_state), feedback_strength) *
 				prng_next_float(&(stm->rng)) <= stm->s_inv;
 
-            if (state_ptr->ta_state < stm->sparse_min_state) {
+            if (state_ptr->ta_state < stm->mid_state) {
             	// Remove TA
             	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
                 continue;
@@ -541,7 +537,7 @@ void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id) {
 			min(-(stm->min_state - state_ptr->ta_state), feedback_strength) *
 			prng_next_float(&(stm->rng)) <= stm->s_inv;
 
-        if (state_ptr->ta_state < stm->sparse_min_state) {
+        if (state_ptr->ta_state < stm->mid_state) {
         	// Remove TA
         	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
         	continue;
@@ -569,19 +565,26 @@ void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_
     struct TANode *al_ptr = stm->active_literals[class_id];
 
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i;
-        if (is_active_literal) {
+        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i / 2;
+        if (is_active_literal && i % 2 == 1) {
             al_ptr = al_ptr->next;
         }
 
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
-    		if (is_active_literal && (i % 2 == X[i / 2])) {
-				// Insert new TA with state stm->sparse_min_state
-				ta_state_insert(stm->ta_state + clause_id, prev_state_ptr, i, stm->sparse_min_state, &prev_state_ptr);
+            if (is_active_literal && (i % 2 == 0 || (i % 2 == 1 && X[i / 2] == 1))) {
+                // (i % 2 == X[i / 2]) means TA i "votes" incorrectly (condition for applying 2 feedback)
+
+				// Insert new TA with state stm->mid_state
+				ta_state_insert(stm->ta_state + clause_id, prev_state_ptr, i, stm->sparse_init_state, &prev_state_ptr);
 				state_ptr = prev_state_ptr->next;
     		}
     		continue;
     	}
+
+        state_ptr->ta_state +=
+            min(stm->max_state - state_ptr->ta_state, feedback_strength) * (
+            0 == action(state_ptr->ta_state, stm->mid_state) &&
+            i % 2 == X[i / 2]);
 
         prev_state_ptr = state_ptr;
         state_ptr = state_ptr->next;

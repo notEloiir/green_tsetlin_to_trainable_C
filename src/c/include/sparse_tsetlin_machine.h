@@ -21,7 +21,7 @@ struct SparseTsetlinMachine {
     uint32_t threshold;
     uint32_t num_literals;
     uint32_t num_clauses;
-    int8_t max_state, min_state, sparse_min_state;
+    int8_t max_state, min_state, sparse_init_state;
     uint8_t boost_true_positive_feedback;
     float s;
 
