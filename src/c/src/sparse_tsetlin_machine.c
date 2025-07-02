@@ -125,14 +125,13 @@ struct SparseTsetlinMachine *stm_create(
     	stm->ta_state[clause_id] = NULL;
     }
 
-    stm->active_literals = (struct TANode **)malloc(num_classes * sizeof(struct TANode *));  // shape: flat (num_classes)
+    stm->al_row_size = (num_literals - 1) / 8 + 1;
+    // shape: flat padded binary (num_classes, num_literals)
+    stm->active_literals = (uint8_t *)malloc(num_classes * stm->al_row_size * sizeof(uint8_t));
     if (stm->active_literals == NULL) {
         perror("Memory allocation failed");
         stm_free(stm);
         return NULL;
-    }
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-    	stm->active_literals[class_id] = NULL;
     }
     
     stm->weights = (int16_t *)malloc(num_clauses * num_classes * sizeof(int16_t));  // shape: flat (num_clauses, num_classes)
@@ -346,27 +345,21 @@ static inline void stm_clear_llists(struct SparseTsetlinMachine *stm) {
 			ta_state_remove(head_ptr, NULL, NULL);
 		}
     }
-
-    for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
-		struct TANode **al_head_ptr = stm->active_literals + class_id;
-		while (*al_head_ptr != NULL) {
-			ta_stateless_remove(al_head_ptr, NULL, NULL);
-		}
-	}
 }
 
 // Free all allocated memory
 void stm_free(struct SparseTsetlinMachine *stm) {
     if (stm != NULL){
-    	if (stm->ta_state != NULL || stm->active_literals != NULL) {
+    	if (stm->ta_state != NULL) {
             stm_clear_llists(stm);
-
             free(stm->ta_state);
-            free(stm->active_literals);
-
             stm->ta_state = NULL;
-            stm->active_literals = NULL;
 		}
+
+        if (stm->active_literals != NULL) {
+            free(stm->active_literals);
+            stm->active_literals = NULL;
+        }
         
         if (stm->weights != NULL) {
             free(stm->weights);
@@ -393,10 +386,14 @@ void stm_free(struct SparseTsetlinMachine *stm) {
 // Initialize values
 void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->mid_state = (stm->max_state + stm->min_state) / 2;
-    stm->sparse_init_state = stm->mid_state - 35;
     stm->sparse_min_state = stm->mid_state - 40;
+    stm->sparse_init_state = stm->sparse_min_state + 5;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
+    
+    for (uint32_t i = 0; i < stm->num_classes * stm->al_row_size; i++) {
+    	stm->active_literals[i] = 0;
+    }
     
     // Init weights randomly to -1 or 1
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
@@ -472,25 +469,19 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
     struct TAStateNode *state_ptr = stm->ta_state[clause_id];
     struct TAStateNode *prev_state_ptr = NULL;
 
-    struct TANode *al_ptr = stm->active_literals[class_id];
-    struct TANode *prev_al_ptr = NULL;
-
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i / 2;
-        if (is_active_literal && i % 2 == 1) {
-            prev_al_ptr = al_ptr;
-            al_ptr = al_ptr->next;
-        }
+        uint32_t literal_id = i >> 1;  // i / 2
+        uint8_t is_negative_TA = i & 1;  // i % 2
+        uint8_t is_active_literal = stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] & (1 << (literal_id & 7));
 
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
-    		if (!is_active_literal && i % 2 == 0 && X[i / 2] == 1) {
+    		if (!is_active_literal && !is_negative_TA && X[literal_id] == 1) {
                 // (i % 2 != X[i / 2]) means TA i "votes" correctly (condition for applying 1a feedback)
                 // (i % 2 == 0) means only positive TAs
                 // (X[i / 2] == 1) means literal at i/2 is active
 
 				// Insert new active literal i/2 for class class_id
-				ta_stateless_insert(stm->active_literals + class_id, prev_al_ptr, i / 2, &prev_al_ptr);
-				al_ptr = prev_al_ptr->next;
+				stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] |= (1 << (literal_id & 7));
     		}
     		continue;
     	}
@@ -563,16 +554,13 @@ void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_
     struct TAStateNode *state_ptr = stm->ta_state[clause_id];
     struct TAStateNode *prev_state_ptr = NULL;
 
-    struct TANode *al_ptr = stm->active_literals[class_id];
-
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
-        uint8_t is_active_literal = al_ptr != NULL && al_ptr->ta_id == i / 2;
-        if (is_active_literal && i % 2 == 1) {
-            al_ptr = al_ptr->next;
-        }
+        uint32_t literal_id = i >> 1;  // i / 2
+        uint8_t is_negative_TA = i & 1;  // i % 2
+        uint8_t is_active_literal = stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] & (1 << (literal_id & 7));
 
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
-            if (is_active_literal && (i % 2 == 0 || (i % 2 == 1 && X[i / 2] == 1))) {
+            if (is_active_literal && (!is_negative_TA || (is_negative_TA && X[literal_id] == 1))) {
                 // (i % 2 == X[i / 2]) means TA i "votes" incorrectly (condition for applying 2 feedback)
 
 				// Insert new TA with state stm->mid_state
@@ -585,7 +573,7 @@ void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_
         state_ptr->ta_state +=
             min(stm->max_state - state_ptr->ta_state, feedback_strength) * (
             0 == action(state_ptr->ta_state, stm->mid_state) &&
-            i % 2 == X[i / 2]);
+            (is_negative_TA == X[literal_id]));
 
         prev_state_ptr = state_ptr;
         state_ptr = state_ptr->next;
