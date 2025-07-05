@@ -8,6 +8,10 @@
 #include "utility.h"
 
 
+// Insert a new node into a linked list after prev
+// If prev is NULL, insert at the head of the list
+// If head_ptr is NULL, it will be initialized to the new node
+// If result is not NULL, it will point to the new node
 void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t ta_id, struct TANode **result) {
 	struct TANode *node = malloc(sizeof(struct TANode));
 	if (node == NULL) {
@@ -33,6 +37,11 @@ void ta_stateless_insert(struct TANode **head_ptr, struct TANode *prev, uint32_t
 	}
 }
 
+// Remove a node from a linked list after prev
+// If prev is NULL, remove the head of the list
+// If head_ptr is NULL, it will not be modified but print an error message
+// If prev is not NULL and prev->next is NULL (trying to remove after last node), nothing happens
+// If result is not NULL, it will point to the next node after the removed node
 void ta_stateless_remove(struct TANode **head_ptr, struct TANode *prev, struct TANode **result) {
 	if (*head_ptr == NULL) {
         fprintf(stderr, "Trying to remove from empty linked list\n");
@@ -131,8 +140,6 @@ struct StatelessTsetlinMachine *sltm_create(
         return NULL;
     }
 
-    /* Set up the Tsetlin Machine structure */
-
     sltm_initialize(sltm);
     
     return sltm;
@@ -144,7 +151,7 @@ static inline uint8_t action(int8_t state, int8_t mid_state) {
 }
 
 
-// Load Tsetlin Machine from a bin file
+// Load Tsetlin Machine from a bin file of a dense (normal, vanilla) Tsetlin Machine
 struct StatelessTsetlinMachine *sltm_load_dense(
     const char *filename, uint32_t y_size, uint32_t y_element_size
 ) {
@@ -327,18 +334,22 @@ void sltm_free(struct StatelessTsetlinMachine *sltm) {
         if (sltm->ta_state != NULL) {
         	sltm_free_state_llists(sltm);
         	free(sltm->ta_state);
+            sltm->ta_state = NULL;
         }
         
         if (sltm->weights != NULL) {
             free(sltm->weights);
+            sltm->weights = NULL;
         }
         
         if (sltm->clause_output != NULL) {
             free(sltm->clause_output);
+            sltm->clause_output = NULL;
         }
         
         if (sltm->votes != NULL) {
             free(sltm->votes);
+            sltm->votes = NULL;
         }
         
         free(sltm);
@@ -356,6 +367,7 @@ void sltm_initialize(struct StatelessTsetlinMachine *sltm) {
 }
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
+// Meaning: which clauses are active for given input
 // Output is stored an internal output array clause_output
 static inline void calculate_clause_output(struct StatelessTsetlinMachine *sltm, const uint8_t *X) {
     // For each clause, check if it is "active" - all necessary literals have the right value
@@ -363,6 +375,10 @@ static inline void calculate_clause_output(struct StatelessTsetlinMachine *sltm,
         sltm->clause_output[clause_id] = 1;
         uint8_t empty_clause = 1;
 
+		// Clause is active if:
+        // - it's not empty (unless skip_empty is unset as should be the case for training)
+        // - each literal present in the clause has the right value (same as the input X)
+        // Iterate over linked list of Tsetlin Automata ids
 		struct TANode *curr_ptr = sltm->ta_state[clause_id];
 		while (curr_ptr != NULL) {
 			empty_clause = 0;
@@ -383,6 +399,7 @@ static inline void calculate_clause_output(struct StatelessTsetlinMachine *sltm,
 static inline void sum_votes(struct StatelessTsetlinMachine *sltm) {
     memset(sltm->votes, 0, sltm->num_classes*sizeof(int32_t));
     
+    // Simple sum of votes for each class, then clip them to the threshold
     for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
         if (sltm->clause_output[clause_id] == 0) {
             continue;
@@ -418,6 +435,8 @@ void sltm_predict(struct StatelessTsetlinMachine *sltm, const uint8_t *X, void *
 }
 
 
+// Example evaluation function
+// Compares predicted labels with true labels and prints accuracy
 void sltm_evaluate(struct StatelessTsetlinMachine *sltm, const uint8_t *X, const void *y, uint32_t rows) {
     uint32_t correct = 0;
     uint32_t total = 0;
@@ -446,6 +465,8 @@ void sltm_evaluate(struct StatelessTsetlinMachine *sltm, const uint8_t *X, const
 
 // --- Basic output_activation functions ---
 
+// Return the index of the class with the highest vote
+// Basic maxarg
 void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, const void *y_pred) {
     if (sltm->y_size != 1) {
         fprintf(stderr, "y_eq_class_idx expects y_size == 1");
@@ -466,6 +487,8 @@ void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, const void *y
     *label_pred = best_class;
 }
 
+// Return a binary vector based on votes for each class
+// Basic binary thresholding (k=mid_state)
 void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, const void *y_pred) {
     if(sltm->y_size != sltm->num_classes) {
         fprintf(stderr, "y_eq_bin_vector expects y_size == tm->num_classes");
@@ -480,6 +503,7 @@ void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, const void *
 }
 
 
+// Set the output activation function for the Tsetlin Machine
 void sltm_set_output_activation(
     struct StatelessTsetlinMachine *sltm,
     void (*output_activation)(const struct StatelessTsetlinMachine *sltm, const void *y_pred)

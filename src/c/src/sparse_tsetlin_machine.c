@@ -40,7 +40,8 @@ void ta_state_insert(struct TAStateNode **head_ptr, struct TAStateNode *prev, ui
 
 // Remove a node from a linked list after prev
 // If prev is NULL, remove the head of the list
-// If head_ptr is NULL, it will not be modified
+// If head_ptr is NULL, it will not be modified but print an error message
+// If prev is not NULL and prev->next is NULL (trying to remove after last node), nothing happens
 // If result is not NULL, it will point to the next node after the removed node
 void ta_state_remove(struct TAStateNode **head_ptr, struct TAStateNode *prev, struct TAStateNode **result) {
 	if (*head_ptr == NULL) {
@@ -157,8 +158,6 @@ struct SparseTsetlinMachine *stm_create(
 
     prng_seed(&(stm->rng), seed);
 
-    /* Set up the Tsetlin Machine structure */
-
     stm_initialize(stm);
     
     return stm;
@@ -250,6 +249,7 @@ struct SparseTsetlinMachine *stm_load_dense(
 }
 
 
+// Save Tsetlin Machine to a bin file
 void stm_save(const struct SparseTsetlinMachine *stm, const char *filename) {
     FILE *file = fopen(filename, "wb");
     if (!file) {
@@ -390,6 +390,8 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
     stm->sparse_init_state = stm->sparse_min_state + 5;
     stm->s_inv = 1.0f / stm->s;
     stm->s_min1_inv = (stm->s - 1.0f) / stm->s;
+
+    // Sparse Tsetlin Machine starts with empty clauses
     
     for (uint32_t i = 0; i < stm->num_classes * stm->al_row_size; i++) {
     	stm->active_literals[i] = 0;
@@ -404,6 +406,7 @@ void stm_initialize(struct SparseTsetlinMachine *stm) {
 }
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
+// Meaning: which clauses are active for given input
 // Output is stored an internal output array clause_output
 static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, const uint8_t *X, uint8_t skip_empty) {
     // For each clause, check if it is "active" - all necessary literals have the right value
@@ -411,7 +414,11 @@ static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, con
         stm->clause_output[clause_id] = 1;
         uint8_t empty_clause = 1;
 
-		struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
+		// Clause is active if:
+        // - it's not empty (unless skip_empty is unset as should be the case for training)
+        // - each literal present in the clause has the right value (same as the input X)
+        // Iterate over linked list of Tsetlin Automata
+        struct TAStateNode *curr_ptr = stm->ta_state[clause_id];
 		while (curr_ptr != NULL) {
 			if (action(curr_ptr->ta_state, stm->mid_state)) {
 				empty_clause = 0;
@@ -433,6 +440,7 @@ static inline void calculate_clause_output(struct SparseTsetlinMachine *stm, con
 static inline void sum_votes(struct SparseTsetlinMachine *stm) {
     memset(stm->votes, 0, stm->num_classes*sizeof(int32_t));
     
+    // Simple sum of votes for each class, then clip them to the threshold
     for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
         if (stm->clause_output[clause_id] == 0) {
             continue;
@@ -450,15 +458,19 @@ static inline void sum_votes(struct SparseTsetlinMachine *stm) {
 
 
 // Type I Feedback
-// Clause at clause_id voted correctly for class at class_id
+// Applied if clause at clause_id voted correctly for class at class_id
 
-// Type a - Clause is active for literals X (clause_output == 1)
+// Type I a - Clause is active for literals X (clause_output == 1)
+// Meaning: it's active and voted correctly
+// Action: reinforce the clause TAs and weights
+// Intuition: so that it continues to vote for the same class
 void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     // float s_inv = 1.0f / stm->s;
     // float s_min1_inv = (stm->s - 1.0f) / stm->s;
 
     uint8_t feedback_strength = 1;
 
+    // Reinforce the clause weight (away from mid_state)
     if (stm->weights[clause_id * stm->num_classes + class_id] >= 0) {
         stm->weights[clause_id * stm->num_classes + class_id] += min(feedback_strength, SHRT_MAX - stm->weights[clause_id * stm->num_classes + class_id]);
     }
@@ -466,6 +478,7 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
         stm->weights[clause_id * stm->num_classes + class_id] -= min(feedback_strength, -(SHRT_MIN - stm->weights[clause_id * stm->num_classes + class_id]));
     }
     
+    // Reinforce the Tsetlin Automata states
     struct TAStateNode *state_ptr = stm->ta_state[clause_id];
     struct TAStateNode *prev_state_ptr = NULL;
 
@@ -474,20 +487,21 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
         uint8_t is_negative_TA = i & 1;  // i % 2
         uint8_t is_active_literal = stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] & (1 << (literal_id & 7));
 
+        // If there's no Tsetlin Automaton for this literal
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
+            // Check if this literal should be added to active literals for this class
     		if (!is_active_literal && !is_negative_TA && X[literal_id] == 1) {
                 // (i % 2 != X[i / 2]) means TA i "votes" correctly (condition for applying 1a feedback)
-                // (i % 2 == 0) means only positive TAs
-                // (X[i / 2] == 1) means literal at i/2 is active
 
-				// Insert new active literal i/2 for class class_id
+				// Insert new active literal literal_id for class class_id
 				stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] |= (1 << (literal_id & 7));
     		}
     		continue;
     	}
+        // Else, there is a Tsetlin Automaton for this literal so reinforce it
 
-        // X[i / 2] should equal action at ta_id==i
-        if (state_ptr->ta_id % 2 != X[state_ptr->ta_id / 2]) {
+        // X[literal_id] should equal action at ta_id (ta_id/2 == literal_id)
+        if ((state_ptr->ta_id & 1) != X[state_ptr->ta_id >> 1]) {
             // Correct, reward
             state_ptr->ta_state +=
 				min(stm->max_state - state_ptr->ta_state, feedback_strength) *
@@ -500,41 +514,49 @@ void type_1a_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32
 				prng_next_float(&(stm->rng)) <= stm->s_inv;
 
             if (state_ptr->ta_state < stm->sparse_min_state) {
-            	// Remove TA
+            	// If falls below threshold sparse_min_state, remove TA
             	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
                 continue;
             }
         }
 
+        // Advance to next TA
         prev_state_ptr = state_ptr;
         state_ptr = state_ptr->next;
     }
 }
 
 
-// Type b - Clause is inactive for literals X (clause_output == 0)
+// Type I b - Clause is inactive for literals X (clause_output == 0)
+// Meaning: it's inactive but would have voted correctly
+// Action: lower the clause TAs, both positive and negative, towards exclusion
+// Intuition: so that it "finds something else to do", "countering force"
 void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id) {
     // float s_inv = 1.0f / stm->s;
 
     uint8_t feedback_strength = 1;
 
+    // Penalize the clause TAs (towards min_state - exclusion)
     struct TAStateNode *state_ptr = stm->ta_state[clause_id];
     struct TAStateNode *prev_state_ptr = NULL;
     for (uint32_t i = 0; i < stm->num_literals * 2; i++) {
+    	// If there's no Tsetlin Automaton for this literal, skip it
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
     		continue;
     	}
+        // Else, there is a Tsetlin Automaton for this literal so penalize it
 
         state_ptr->ta_state -=
 			min(-(stm->min_state - state_ptr->ta_state), feedback_strength) *
 			prng_next_float(&(stm->rng)) <= stm->s_inv;
 
         if (state_ptr->ta_state < stm->sparse_min_state) {
-        	// Remove TA
-        	ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
+        	// If falls below threshold sparse_min_state, remove TA
+            ta_state_remove(stm->ta_state + clause_id, prev_state_ptr, &state_ptr);
         	continue;
         }
 
+        // Advance to next TA
         prev_state_ptr = state_ptr;
         state_ptr = state_ptr->next;
     }
@@ -544,7 +566,10 @@ void type_1b_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id) {
 // Type II Feedback
 // Clause at clause_id voted incorrectly for class at class_id
 // && Clause is active for literals X (clause_output == 1)
-
+// Meaning: it's active but voted incorrectly
+// Action: raise excluded clause TAs that could deactivate the clause is included (towards inclusion)
+// and punish the clause weight (towards zero)
+// Intuition: either fix the weight or exclude the clause, whichever is easier
 void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_t clause_id, uint32_t class_id) {
     uint8_t feedback_strength = 1;
 
@@ -559,7 +584,10 @@ void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_
         uint8_t is_negative_TA = i & 1;  // i % 2
         uint8_t is_active_literal = stm->active_literals[class_id * stm->al_row_size + (literal_id >> 3)] & (1 << (literal_id & 7));
 
+        // If there's no Tsetlin Automaton for this literal
     	if (state_ptr == NULL || state_ptr->ta_id != i) {
+            // Check if Tsetlin Automaton for this literal should be added
+            // Prerequisite: this literal is active for this class (from type I a)
             if (is_active_literal && (!is_negative_TA || (is_negative_TA && X[literal_id] == 1))) {
                 // (i % 2 == X[i / 2]) means TA i "votes" incorrectly (condition for applying 2 feedback)
 
@@ -569,12 +597,14 @@ void type_2_feedback(struct SparseTsetlinMachine *stm, const uint8_t *X, uint32_
     		}
     		continue;
     	}
+        // Else, there is a Tsetlin Automaton for this literal so raise it
 
         state_ptr->ta_state +=
             min(stm->max_state - state_ptr->ta_state, feedback_strength) * (
             0 == action(state_ptr->ta_state, stm->mid_state) &&
             (is_negative_TA == X[literal_id]));
 
+        // Advance to next TA
         prev_state_ptr = state_ptr;
         state_ptr = state_ptr->next;
     }
@@ -587,8 +617,11 @@ void stm_train(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y
 			const uint8_t *X_row = X + (row * stm->num_literals);
 			void *y_row = (void *)((uint8_t *)y + (row * stm->y_size * stm->y_element_size));
 
+			// Calculate clause output - which clauses are active for this row of input
+            // Treat empty clauses as inactive (skip_empty = 0) so that feedback type I a applies
 			calculate_clause_output(stm, X_row, 0);
 
+			// Sum up clause votes for each class, clipping them to the threshold
 			sum_votes(stm);
 
 			// Calculate and apply feedback to all clauses
@@ -605,18 +638,20 @@ void stm_predict(struct SparseTsetlinMachine *stm, const uint8_t *X, void *y_pre
     	const uint8_t* X_row = X + (row * stm->num_literals);
         void *y_pred_row = (void *)(((uint8_t *)y_pred) + (row * stm->y_size * stm->y_element_size));
 
-        // Calculate clause output
+        // Calculate clause output - which clauses are active for this row of input
         calculate_clause_output(stm, X_row, 1);
 
         // Sum up clause votes for each class
         sum_votes(stm);
 
-        // Pass through output activation function
+        // Pass through output activation function to get output in desired format
         stm->output_activation(stm, y_pred_row);
     }
 }
 
 
+// Example evaluation function
+// Compares predicted labels with true labels and prints accuracy
 void stm_evaluate(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y, uint32_t rows) {
     uint32_t correct = 0;
     uint32_t total = 0;
@@ -645,6 +680,8 @@ void stm_evaluate(struct SparseTsetlinMachine *stm, const uint8_t *X, const void
 
 // --- Basic output_activation functions ---
 
+// Return the index of the class with the highest vote
+// Basic maxarg
 void stm_oa_class_idx(const struct SparseTsetlinMachine *stm, const void *y_pred) {
     if (stm->y_size != 1) {
         fprintf(stderr, "y_eq_class_idx expects y_size == 1");
@@ -665,6 +702,8 @@ void stm_oa_class_idx(const struct SparseTsetlinMachine *stm, const void *y_pred
     *label_pred = best_class;
 }
 
+// Return a binary vector based on votes for each class
+// Basic binary thresholding (k=mid_state)
 void stm_oa_bin_vector(const struct SparseTsetlinMachine *stm, const void *y_pred) {
     if(stm->y_size != stm->num_classes) {
         fprintf(stderr, "y_eq_bin_vector expects y_size == tm->num_classes");
@@ -679,6 +718,7 @@ void stm_oa_bin_vector(const struct SparseTsetlinMachine *stm, const void *y_pre
 }
 
 
+// Set the output activation function for the Tsetlin Machine
 void stm_set_output_activation(
     struct SparseTsetlinMachine *stm,
     void (*output_activation)(const struct SparseTsetlinMachine *stm, const void *y_pred)
@@ -688,6 +728,7 @@ void stm_set_output_activation(
 
 
 // Internal component of feedback functions below
+// Intuition for the choice is in comments above, for each type_*_feedback function
 void stm_apply_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, uint32_t class_id, uint8_t is_class_positive, const uint8_t *X) {
 	uint8_t is_vote_positive = stm->weights[(clause_id * stm->num_classes) + class_id] >= 0;
 	if (is_vote_positive == is_class_positive) {
@@ -707,20 +748,27 @@ void stm_apply_feedback(struct SparseTsetlinMachine *stm, uint32_t clause_id, ui
 // Calculate clause-class feedback
 
 void stm_feedback_class_idx(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y) {
-    // Correct label gets feedback type 1a or 1b, incorrect maybe get type 2 (depending on clause output)
+    // Pick positive and negative classes based on the label:
+    // Positive class is the one that matches the label,
+    // negative is randomly chosen from the rest, weighted by votes
     const uint32_t *label_ptr = (const uint32_t *)y;
     const uint32_t positive_class = *label_ptr;
     uint32_t negative_class = 0;
 
+    // Calculate class update probabilities:
+    // Positive class is inversely proportional to the votes for it, (avoiding overfitting)
+    // Negative class is proportional to the votes for it (more sure it should not be chosen)
     int32_t votes_clipped_positive = clip(stm->votes[positive_class], (int32_t)stm->threshold);
 	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
 
+    // Apply feedback to: chosen classes - every clause
 	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
 		if (prng_next_float(&(stm->rng)) <= update_probability_positive) {
 			stm_apply_feedback(stm, clause_id, positive_class, 1, X);
 		}
 	}
 
+    // Continue for negative class
     int32_t sum_votes_clipped_negative = 0;
     for (uint32_t class_id = 0; class_id < stm->num_classes; class_id++) {
         if (class_id != positive_class) {
@@ -751,6 +799,9 @@ void stm_feedback_class_idx(struct SparseTsetlinMachine *stm, const uint8_t *X, 
 }
 
 void stm_feedback_bin_vector(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y) {
+    // Pick positive and negative classes based on the label:
+    // Positive is randomly chosen from the ones that matches the label, weighted by votes,
+    // negative is randomly chosen from the rest, weighted by votes
     const uint8_t *label_arr = (const uint8_t *)y;
     uint32_t positive_class = 0;
     uint32_t negative_class = 0;
@@ -774,15 +825,20 @@ void stm_feedback_bin_vector(struct SparseTsetlinMachine *stm, const uint8_t *X,
 		}
 	}
 
+	// Calculate class update probabilities:
+    // Positive class is inversely proportional to the votes for it, (avoiding overfitting)
+    // Negative class is proportional to the votes for it (more sure it should not be chosen)
 	int32_t votes_clipped_positive = clip(stm->votes[negative_class], (int32_t)stm->threshold);
 	float update_probability_positive = ((float)stm->threshold - (float)votes_clipped_positive) / (float)(2 * stm->threshold);
 
+    // Apply feedback to: chosen classes - every clause
 	for (uint32_t clause_id = 0; clause_id < stm->num_clauses; clause_id++) {
 		if (prng_next_float(&(stm->rng)) <= update_probability_positive) {
 			stm_apply_feedback(stm, clause_id, positive_class, 1, X);
 		}
 	}
 
+    // Continue for negative class
 negative_feedback:
 
     int32_t sum_votes_clipped_negative = 0;
@@ -815,6 +871,7 @@ negative_feedback:
 }
 
 
+// Set the feedback function for the Tsetlin Machine
 void stm_set_calculate_feedback(
     struct SparseTsetlinMachine *stm,
     void (*calculate_feedback)(struct SparseTsetlinMachine *stm, const uint8_t *X, const void *y)
