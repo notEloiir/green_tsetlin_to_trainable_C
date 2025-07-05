@@ -3,7 +3,11 @@
 #include <stdint.h>
 
 
-int32_t clip(const int32_t x, const int32_t threshold);
+static inline int32_t clip(const int32_t x, const int32_t threshold) {
+    if (x > threshold) return threshold;
+    else if (x < -threshold) return -threshold;
+    return x;
+}
 
 #define min(a,b) \
    ({ __typeof__ (a) _a = (a); \
