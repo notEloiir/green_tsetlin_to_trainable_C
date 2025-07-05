@@ -228,7 +228,7 @@ struct StatelessTsetlinMachine *sltm_load_dense(
 }
 
 
-void sltm_save(struct StatelessTsetlinMachine *sltm, const char *filename) {
+void sltm_save(const struct StatelessTsetlinMachine *sltm, const char *filename) {
     FILE *file = fopen(filename, "wb");
     if (!file) {
         perror("Error opening file for writing");
@@ -357,7 +357,7 @@ void sltm_initialize(struct StatelessTsetlinMachine *sltm) {
 
 // Calculate the output of each clause using the actions of each Tsetlin Automaton
 // Output is stored an internal output array clause_output
-static inline void calculate_clause_output(struct StatelessTsetlinMachine *sltm, uint8_t *X) {
+static inline void calculate_clause_output(struct StatelessTsetlinMachine *sltm, const uint8_t *X) {
     // For each clause, check if it is "active" - all necessary literals have the right value
     for (uint32_t clause_id = 0; clause_id < sltm->num_clauses; clause_id++) {
         sltm->clause_output[clause_id] = 1;
@@ -401,9 +401,9 @@ static inline void sum_votes(struct StatelessTsetlinMachine *sltm) {
 
 // Inference
 // y_pred should be allocated like: void *y_pred = malloc(rows * sltm->y_size * sltm->y_element_size);
-void sltm_predict(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y_pred, uint32_t rows) {
+void sltm_predict(struct StatelessTsetlinMachine *sltm, const uint8_t *X, void *y_pred, uint32_t rows) {
     for (uint32_t row = 0; row < rows; row++) {
-        uint8_t* X_row = X + (row * sltm->num_literals);
+    	const uint8_t* X_row = X + (row * sltm->num_literals);
         void *y_pred_row = (void *)(((uint8_t *)y_pred) + (row * sltm->y_size * sltm->y_element_size));
 
         // Calculate clause output
@@ -418,7 +418,7 @@ void sltm_predict(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y_pred
 }
 
 
-void sltm_evaluate(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y, uint32_t rows) {
+void sltm_evaluate(struct StatelessTsetlinMachine *sltm, const uint8_t *X, const void *y, uint32_t rows) {
     uint32_t correct = 0;
     uint32_t total = 0;
     void *y_pred = malloc(rows * sltm->y_size * sltm->y_element_size);
@@ -446,7 +446,7 @@ void sltm_evaluate(struct StatelessTsetlinMachine *sltm, uint8_t *X, void *y, ui
 
 // --- Basic output_activation functions ---
 
-void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, void *y_pred) {
+void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, const void *y_pred) {
     if (sltm->y_size != 1) {
         fprintf(stderr, "y_eq_class_idx expects y_size == 1");
         exit(1);
@@ -466,7 +466,7 @@ void sltm_oa_class_idx(const struct StatelessTsetlinMachine *sltm, void *y_pred)
     *label_pred = best_class;
 }
 
-void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, void *y_pred) {
+void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, const void *y_pred) {
     if(sltm->y_size != sltm->num_classes) {
         fprintf(stderr, "y_eq_bin_vector expects y_size == tm->num_classes");
         exit(1);
@@ -482,7 +482,7 @@ void sltm_oa_bin_vector(const struct StatelessTsetlinMachine *sltm, void *y_pred
 
 void sltm_set_output_activation(
     struct StatelessTsetlinMachine *sltm,
-    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, void *y_pred)
+    void (*output_activation)(const struct StatelessTsetlinMachine *sltm, const void *y_pred)
 ) {
     sltm->output_activation = output_activation;
 }

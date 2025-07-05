@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
-C_SRC = src/c/src/utility.c src/c/src/tsetlin_machine.c src/c/src/sparse_tsetlin_machine.c src/c/src/stateless_tsetlin_machine.c 
+C_SRC = src/c/src/fast_prng.c src/c/src/utility.c src/c/src/tsetlin_machine.c src/c/src/sparse_tsetlin_machine.c src/c/src/stateless_tsetlin_machine.c 
 C_TESTS_SRC = tests/c/unity/unity.c tests/c/test_runner.c tests/c/test_tsetlin_machine.c tests/c/test_linked_list.c
 BUILD_DIR = build
 INCLUDE = -I src/c/include -I src/c/include/flatbuffers -I src/c/include/flatcc

@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "tsetlin_machine.h"
-#include "sparse_tsetlin_machine.h"
-#include "stateless_tsetlin_machine.h"
 #include "mnist_util.h"
 
 
@@ -21,11 +18,12 @@ int main() {
     uint32_t y_size = 1;
     uint32_t y_element_size = sizeof(int32_t);
     float s = 20.0f;
+    uint32_t seed = 42;
 
     struct TsetlinMachine *tm = tm_create(num_classes, threshold, num_literals, num_clauses,
-        max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
+        max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s, seed);
 	struct SparseTsetlinMachine *stm = stm_create(num_classes, threshold, num_literals, num_clauses,
-		max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s);
+		max_state, min_state, boost_true_positive_feedback, y_size, y_element_size, s, seed);
 	if (tm == NULL || stm == NULL) {
 		perror("tm_load failed");
 		return 1;
