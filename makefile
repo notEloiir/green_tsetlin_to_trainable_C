@@ -5,7 +5,8 @@ CFLAGS = -Wall -Wextra -O2
 C_SRC = src/c/src/utility.c src/c/src/tsetlin_machine.c src/c/src/sparse_tsetlin_machine.c src/c/src/stateless_tsetlin_machine.c 
 C_TESTS_SRC = tests/c/unity/unity.c tests/c/test_runner.c tests/c/test_tsetlin_machine.c tests/c/test_linked_list.c
 BUILD_DIR = build
-INCLUDE = -I src/c/include
+INCLUDE = -I src/c/include -I src/c/include/flatbuffers -I src/c/include/flatcc
+LDFLAGS = -L src/c/lib -lflatcc -lflatccrt
 
 
 # === Default target ===
@@ -14,19 +15,19 @@ all: run_mnist_demo
 # === File targets ===
 mnist_demo_inference: $(C_SRC) demos/mnist/c/mnist_util.c demos/mnist/c/pretrained_inference_demo.c
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
+	$(CC) $(INCLUDE) $(CFLAGS) $^ $(LDFLAGS) -o $(BUILD_DIR)/$@
 
 mnist_demo: $(C_SRC) demos/mnist/c/mnist_util.c demos/mnist/c/training_demo.c
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
+	$(CC) $(INCLUDE) $(CFLAGS) $^ $(LDFLAGS) -o $(BUILD_DIR)/$@
 
 model_size_demo: $(C_SRC) demos/model_size/c/demo.c
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
+	$(CC) $(INCLUDE) $(CFLAGS) $^ $(LDFLAGS) -o $(BUILD_DIR)/$@
 
 tests_bin: $(C_TESTS_SRC)
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $(BUILD_DIR)/$@
+	$(CC) $(INCLUDE) $(CFLAGS) $^ $(LDFLAGS) -o $(BUILD_DIR)/$@
 
 # === Run targets ===
 run_mnist_inference_demo: run_mnist_inference_demo_py run_mnist_inference_demo_c
