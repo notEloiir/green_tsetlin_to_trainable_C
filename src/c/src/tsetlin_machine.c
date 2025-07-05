@@ -313,7 +313,7 @@ struct TsetlinMachine *tm_load_fbs(
     struct TsetlinMachine *tm = tm_create(
         num_classes, threshold, num_literals, num_clauses,
         max_state, min_state, boost_true_positive_feedback,
-        y_size, y_element_size, s
+        y_size, y_element_size, s, 42
     );
     if (!tm) {
         fprintf(stderr, "tm_create failed\n");
